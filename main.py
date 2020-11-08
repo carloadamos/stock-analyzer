@@ -1,5 +1,6 @@
 # Imports
 import pymongo
+from datetime import datetime
 
 # Database Connection
 connection_url = 'mongodb+srv://admin:admin@cluster0.70gug.mongodb.net/exercise-tracker?retryWrites=true&w=majority'
@@ -51,13 +52,30 @@ def priceAboveMovingAverage(stock, length):
         return False
 
 
+def trade(stock, action):
+    transaction = {"code": stock['code'], "date": datetime.utcfromtimestamp(stock['timestamp']).strftime('%Y-%m-%d %H:%M:%S'),
+                   "action": action, "price": stock['close']}
+
+    print(transaction)
+
+
 # Retrieve Stocks
 stocks = fetchStocks('2GO')
 
+sell = False
+action = 'BUY'
 # Loop
 for stock in stocks:
-    print(stock['code'], stock['timestamp'], stock['close'], stock['alma'], (priceAboveAlma(stock) and 'ABOVE_ALMA' or 'BELOW_ALMA'),
-          stock['ma20'], (priceAboveMovingAverage(stock, 20) and 'ABOVE_MA20' or 'BELOW_MA20'))
+    action = sell and 'SELL' or 'BUY'
+
+    if not sell:
+        if priceAboveAlma(stock) and priceAboveMovingAverage(stock, 20):
+            sell = not sell
+            trade(stock, action)
+    else:
+        if not priceAboveMovingAverage(stock, 20):
+            sell = not sell
+            trade(stock, action)
 
 # Check MACD Crossover Functions
 
