@@ -24,37 +24,39 @@ def backtest(code):
     for stock in stocks:
         action = buy and 'BUY' or 'SELL'
 
-        if buy:
-            if not prev_macd_above_signal and macd_above_signal(stock):
-                if (value_above_target(stock['value'], 1000000)):
-                    prev_values = get_previous_values(stocks, i, 5)
-                    valid = True
-                    invalid_ctr = 0
+        if stock['timestamp'] >= 1451595600:
+            if buy:
+                if not prev_macd_above_signal and macd_above_signal(stock):
+                    if (value_above_target(stock['value'], 1000000)):
+                        prev_values = get_previous_values(stocks, i, 5)
+                        valid = True
+                        invalid_ctr = 0
 
-                    for value in prev_values:
-                        if not value_above_target(value, 800000):
-                            invalid_ctr += 1
-                        if invalid_ctr > 1:
-                            valid = False
-                    if valid:
-                        if price_above_alma(stock):
-                            txn = trade(stock, action)
-                            risk = calculate_risk(stocks, i)
-                            if risk >= -4.0:
-                                txn['risk'] = risk
-                                txns.append(txn)
-                                buy = not buy
-        else:
-            if not price_above_alma(stock):
-                txn = trade(stock, action)
-                txn['pnl'] = compute_pnl(txn, txns)
-                txns.append(txn)
-                buy = not buy
+                        for value in prev_values:
+                            if not value_above_target(value, 800000):
+                                invalid_ctr += 1
+                            if invalid_ctr > 1:
+                                valid = False
+                        if valid:
+                            if price_above_alma(stock):
+                                txn = trade(stock, action)
+                                risk = calculate_risk(stocks, i)
+                                if risk >= -4.0:
+                                    txn['risk'] = risk
+                                    txns.append(txn)
+                                    buy = not buy
+            else:
+                if not price_above_alma(stock):
+                    txn = trade(stock, action)
+                    txn['pnl'] = compute_pnl(txn, txns)
+                    txns.append(txn)
+                    buy = not buy
 
         prev_macd_above_signal = macd_above_signal(stock)
         i += 1
 
     df = pd.DataFrame(txns)
+    pd.set_option('display.max_rows', df.shape[0]+1)
     print(df)
 
     stats = calculate_win_rate(txns)
