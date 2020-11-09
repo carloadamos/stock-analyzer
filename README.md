@@ -9,3 +9,7 @@ MAMA Strategy
     - check breakout candle
     - previous candle must be below alma
 6. Check volume
+
+TODO:
+1. Win rate per test
+2. Run all test
