@@ -21,6 +21,7 @@ COMM_RATE = 1.19
 RISK = 4
 TARGET_VALUE = 1000000
 TARGET_PREVIOUS_VALUE = 800000
+START_DATE = 1451595600
 
 
 def backtest(code):
@@ -34,7 +35,7 @@ def backtest(code):
     for stock in stocks:
         action = buy and 'BUY' or 'SELL'
 
-        if stock['timestamp'] >= 1451595600:
+        if stock['timestamp'] >= START_DATE:
             if buy:
                 if not prev_macd_above_signal and macd_above_signal(stock):
                     if (value_above_target(stock['value'], TARGET_VALUE)):
