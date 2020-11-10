@@ -13,4 +13,5 @@ MAMA Strategy
 TODO:
 1. Win rate per test -- DONE
 2. Run all test -- DONE
-3. indicate to check risk or not -- IN PROGRESS
+3. indicate to check risk or not -- DONE
+4. Fix stoploss -- DONE

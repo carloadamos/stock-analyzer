@@ -50,17 +50,21 @@ def backtest(code, check_risk=True):
                                 valid = False
                         if valid:
                             if close_above_alma(stock):
-                                txn = trade(stock, action)
-                                risk = calculate_risk(stocks, i)
-                                if risk >= -RISK and check_risk:
-                                    txn['risk'] = risk
-                                    txns.append(txn)
-                                    buy = not buy
+                                risk = round(calculate_risk(stocks, i), 2)
+                                if check_risk:
+                                    if risk >= -RISK:
+                                        txn = trade(stock, action)
+                                        txn['risk'] = risk
+                                        txns.append(txn)
+                                        buy = not buy
                                 else:
+                                    txn = trade(stock, action)
                                     txns.append(txn)
+                                    risk = calculate_risk(stocks, i)
+                                    txn['risk'] = risk
                                     buy = not buy
             else:
-                if not close_above_alma(stock):
+                if close_below_alma(stock) and close_below_alma(stocks[i-1]):
                     txn = trade(stock, action)
                     txn['pnl'] = compute_pnl(txn, txns)
                     txns.append(txn)
@@ -69,14 +73,20 @@ def backtest(code, check_risk=True):
         prev_macd_above_signal = macd_above_signal(stock)
         i += 1
 
-    df = pd.DataFrame(txns)
-    pd.set_option('display.max_rows', df.shape[0]+1)
-    print(df)
-
-    return calculate_win_rate(txns)
+    return txns
 
 
 def calculate_win_rate(txns):
+    if len(txns) == 0:
+        return {
+            "win_rate": 0,
+            "wins": 0,
+            "max_win": 0,
+            "loss": 0,
+            "max_loss": 0,
+            "total": 0
+        }
+
     win_rate = 0
     i = 0
     total = 0
@@ -148,7 +158,7 @@ def calculate_risk(stocks, cur_pos):
     while True:
         if i is not 0 and cur_pos is not 0:
             prev_candle = stocks[cur_pos-i]
-            if not close_above_alma(prev_candle):
+            if close_below_alma(prev_candle):
                 break
             if close_above_alma(prev_candle) and low_below_alma(prev_candle):
                 risk = compute_profit(entry_point, prev_candle['alma'])
@@ -167,26 +177,6 @@ def previous_breakout_candle(stock, indicator):
     return stock['open'] <= indicator and stock['close'] >= indicator
 
 
-def process_backtest(code, check_risk=True):
-    logging.info('Starting test for : {0}'.format(code))
-    print('Starting test for : {0}\n'.format(code))
-
-    stats = backtest(code, check_risk)
-
-    print('\nWin rate: {0}% \nWins: {1}\nMax Win: {2}%\nLoss: {3}\nMax Loss: {4}%\nTotal: {5} %\n'
-          .format(
-              stats['win_rate'],
-              stats['wins'],
-              stats['max_win'],
-              stats['loss'],
-              stats['max_loss'],
-              stats['total']))
-    logging.info('End of test for : {0}'.format(code))
-    print('End of test for : {0}\n'.format(code))
-
-    return stats
-
-
 def close_above_alma(stock):
     """
     Identify if close price is above ALMA.
@@ -195,6 +185,16 @@ def close_above_alma(stock):
     """
     if stock['alma'] is not None:
         return stock['close'] > stock['alma']
+
+
+def close_below_alma(stock):
+    """
+    Identify if close price is below ALMA.
+    :param stock: Stock object
+    :return: boolean
+    """
+    if stock['alma'] is not None:
+        return stock['close'] < stock['alma']
 
 
 def low_below_alma(stock):
@@ -230,46 +230,74 @@ def value_above_target(value, min_target):
     return value > min_target
 
 
-def process_all_backtest(check_risk=True):
+def process_backtest(codes_to_test, check_risk=True):
     logging.info('Starting test for ALL stocks')
     print('Starting test for ALL stocks\n')
 
-    stats = []
-    for code in codes:
-        stat = process_backtest(code, check_risk)
-        stat['code'] = code
-        stats.append(stat)
+    txns = []
+    for code in codes_to_test:
+        logging.info('Starting test of {}'.format(code))
+        print('Starting test of {}'.format(code))
+
+        txn = backtest(code, check_risk)
+        txns = txns + txn
+
+        logging.info('End of test of {}'.format(code))
+        print('End of test of {}'.format(code))
 
     logging.info('End of test for ALL stocks')
     print('End of test for ALL stocks\n')
 
-    return stats
+    return txns
 
 
 def check_risk():
     check_risk = input(
         'Include risk checking? Current value is: {0} [Y/N] '.format(RISK))
-    check_risk = (check_risk == 'Y' or check_risk == 'y') and True or False
+    check_risk = check_risk.upper()
+    check_risk = check_risk == 'Y' and True or False
 
     return check_risk
 
 
-stats = []
+def display_stats(stats):
+    print('\nWin rate: {0}% \nWins: {1}\nMax Win: {2}%\nLoss: {3}\nMax Loss: {4}%\nTotal: {5}%\n'
+          .format(
+              stats['win_rate'],
+              stats['wins'],
+              stats['max_win'],
+              stats['loss'],
+              stats['max_loss'],
+              stats['total']))
+
+
+all_txns = []
 check_risk = check_risk()
+stocks = []
+
 if len(sys.argv) > 1:
-    if sys.argv[1] != 'ALL':
-        process_backtest(sys.argv[1], check_risk)
-    else:
-        stats = process_all_backtest(check_risk)
+    code = sys.argv[1].upper()
+    stocks = code == 'ALL' and codes or [code]
+
+    all_txns = process_backtest(stocks, check_risk)
+
 else:
     code = input('Enter stock to test: ')
-    if code != '':
-        if code != 'ALL':
-            process_backtest(code, check_risk)
-        else:
-            stats = process_all_backtest(check_risk)
 
-if len(stats) != 0:
-    stats_df = pd.DataFrame(stats)
-    pd.set_option('display.max_rows', stats_df.shape[0]+1)
-    print(stats_df)
+    if code != '':
+        code = code.upper()
+        stocks = code == 'ALL' and codes or [code]
+
+        all_txns = process_backtest(stocks, check_risk)
+    else:
+        all_txns = process_backtest(stocks, check_risk)
+
+if len(all_txns) != 0:
+    stats = calculate_win_rate(all_txns)
+
+    txns_df = pd.DataFrame(all_txns)
+    txns_df.to_excel("result.xlsx", engine='xlsxwriter')
+    pd.set_option('display.max_rows', txns_df.shape[0]+1)
+
+    print(txns_df)
+    display_stats(stats)
