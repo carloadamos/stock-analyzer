@@ -49,7 +49,7 @@ def backtest(code):
                             if invalid_ctr > 1:
                                 valid = False
                         if valid:
-                            if price_above_alma(stock):
+                            if close_above_alma(stock):
                                 txn = trade(stock, action)
                                 risk = calculate_risk(stocks, i)
                                 if risk >= -RISK:
@@ -57,7 +57,7 @@ def backtest(code):
                                     txns.append(txn)
                                     buy = not buy
             else:
-                if not price_above_alma(stock):
+                if not close_above_alma(stock):
                     txn = trade(stock, action)
                     txn['pnl'] = compute_pnl(txn, txns)
                     txns.append(txn)
@@ -101,7 +101,7 @@ def compute_profit(buy_price, sell_price):
     return (((sell_price - buy_price) / buy_price) * 100)
 
 
-def fetbuy_pricech_all_stocks():
+def fetch_all_stocks():
     """
     Fetch all stocks.
     """
@@ -129,16 +129,17 @@ def get_previous_values(stocks, cur_pos, length):
 
 
 def calculate_risk(stocks, cur_pos):
-    risk = 0
     i = 0
     entry_point = stocks[cur_pos]['close']
+    risk = compute_profit(entry_point, stocks[cur_pos]['alma'])
 
     while True:
         if i is not 0 and cur_pos is not 0:
             prev_candle = stocks[cur_pos-i]
-            if price_above_alma(prev_candle) and low_below_alma(prev_candle):
-                risk = compute_profit(entry_point, prev_candle['alma'])
+            if not close_above_alma(prev_candle):
                 break
+            if close_above_alma(prev_candle) and low_below_alma(prev_candle):
+                risk = compute_profit(entry_point, prev_candle['alma'])
         i += 1
 
     return risk
@@ -154,7 +155,18 @@ def previous_breakout_candle(stock, indicator):
     return stock['open'] <= indicator and stock['close'] >= indicator
 
 
-def price_above_alma(stock):
+def process_backtest(code):
+    logging.info('Starting test for : {0}'.format(code))
+    print('Starting test for : {0}\n'.format(code))
+    stats = backtest(code)
+    print('\nWin rate: {0}% Wins: {1} Loss: {2} Total: {3}%\n'.format(
+        stats['win_rate'], stats['wins'], stats['loss'], stats['total']))
+    logging.info('End of test for : {0}'.format(code))
+    print('End of test for : {0}\n'.format(code))
+    return stats
+
+
+def close_above_alma(stock):
     """
     Identify if close price is above ALMA.
     :param stock: Stock object
@@ -197,34 +209,34 @@ def value_above_target(value, min_target):
     return value > min_target
 
 
+def process_all_backtest():
+    logging.info('Starting test for ALL stocks')
+    print('Starting test for ALL stocks\n')
+
+    stats = []
+    for code in codes:
+        stat = process_backtest(code)
+        stat['code'] = code
+        stats.append(stat)
+
+    logging.info('End of test for ALL stocks')
+    print('End of test for ALL stocks\n')
+
+    return stats
+
+
 if len(sys.argv) > 1:
-    logging.info('Starting test for : {0}'.format(sys.argv[1]))
-    backtest(sys.argv[1])
+    if sys.argv[1] != 'ALL':
+        process_backtest(sys.argv[1])
+    else:
+        process_all_backtest()
 else:
     code = input('Enter stock to test: ')
     if code != '':
         if code != 'ALL':
-            logging.info('Starting test for : {0}'.format(code))
-            stats = backtest(code)
-            print('\nWin rate: {0}% Wins: {1} Loss: {2} Total: {3}%\n'.format(
-                stats['win_rate'], stats['wins'], stats['loss'], stats['total']))
-            logging.info('End of test for : {0}'.format(code))
+            process_backtest(code)
         else:
-            logging.info('Starting test for ALL stocks')
-
-            stats = []
-            for code in codes:
-                logging.info('Starting test for : {0}'.format(code))
-                print('Starting test for : {0}'.format(code))
-                stat = backtest(code)
-                stat['code'] = code
-                stats.append(stat)
-                logging.info('End of test for : {0}'.format(code))
-                print('End of test for : {0}'.format(code))
-
+            stats = process_all_backtest()
             stats_df = pd.DataFrame(stats)
             pd.set_option('display.max_rows', stats_df.shape[0]+1)
             print(stats_df)
-            # print('\nWin rate: {0}% Wins: {1} Loss: {2} Total: {3}%\n'.format(
-            #     stats['win_rate'], stats['wins'], stats['loss'], stats['total']))
-            logging.info('End of test for : {0}'.format(code))
