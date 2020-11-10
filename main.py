@@ -24,7 +24,7 @@ TARGET_PREVIOUS_VALUE = 800000
 START_DATE = 1451595600
 
 
-def backtest(code):
+def backtest(code, check_risk=True):
     stocks = fetch_stocks(code)
     buy = True
     i = 0
@@ -52,8 +52,11 @@ def backtest(code):
                             if close_above_alma(stock):
                                 txn = trade(stock, action)
                                 risk = calculate_risk(stocks, i)
-                                if risk >= -RISK:
+                                if risk >= -RISK and check_risk:
                                     txn['risk'] = risk
+                                    txns.append(txn)
+                                    buy = not buy
+                                else:
                                     txns.append(txn)
                                     buy = not buy
             else:
@@ -77,6 +80,9 @@ def calculate_win_rate(txns):
     win_rate = 0
     i = 0
     total = 0
+    df = pd.DataFrame(txns)
+    max_loss = df['pnl'].min()
+    max_win = df['pnl'].max()
     for txn in txns:
         if txn['action'] == 'SELL':
             if txn['pnl'] > 0:
@@ -86,7 +92,13 @@ def calculate_win_rate(txns):
     if i is not 0:
         win_rate = round((i/len(txns)) * 100, 2)
 
-    return {"win_rate": win_rate, "wins": i, "loss": len(txns) - i, "total": round(total, 2)}
+    return {
+        "win_rate": win_rate,
+        "wins": i,
+        "max_win": max_win,
+        "loss": len(txns) - i,
+        "max_loss": max_loss,
+        "total": round(total, 2)}
 
 
 def convert_timestamp(timestamp):
@@ -155,14 +167,23 @@ def previous_breakout_candle(stock, indicator):
     return stock['open'] <= indicator and stock['close'] >= indicator
 
 
-def process_backtest(code):
+def process_backtest(code, check_risk=True):
     logging.info('Starting test for : {0}'.format(code))
     print('Starting test for : {0}\n'.format(code))
-    stats = backtest(code)
-    print('\nWin rate: {0}% Wins: {1} Loss: {2} Total: {3}%\n'.format(
-        stats['win_rate'], stats['wins'], stats['loss'], stats['total']))
+
+    stats = backtest(code, check_risk)
+
+    print('\nWin rate: {0}% \nWins: {1}\nMax Win: {2}%\nLoss: {3}\nMax Loss: {4}%\nTotal: {5} %\n'
+          .format(
+              stats['win_rate'],
+              stats['wins'],
+              stats['max_win'],
+              stats['loss'],
+              stats['max_loss'],
+              stats['total']))
     logging.info('End of test for : {0}'.format(code))
     print('End of test for : {0}\n'.format(code))
+
     return stats
 
 
@@ -209,13 +230,13 @@ def value_above_target(value, min_target):
     return value > min_target
 
 
-def process_all_backtest():
+def process_all_backtest(check_risk=True):
     logging.info('Starting test for ALL stocks')
     print('Starting test for ALL stocks\n')
 
     stats = []
     for code in codes:
-        stat = process_backtest(code)
+        stat = process_backtest(code, check_risk)
         stat['code'] = code
         stats.append(stat)
 
@@ -225,18 +246,30 @@ def process_all_backtest():
     return stats
 
 
+def check_risk():
+    check_risk = input(
+        'Include risk checking? Current value is: {0} [Y/N] '.format(RISK))
+    check_risk = (check_risk == 'Y' or check_risk == 'y') and True or False
+
+    return check_risk
+
+
+stats = []
+check_risk = check_risk()
 if len(sys.argv) > 1:
     if sys.argv[1] != 'ALL':
-        process_backtest(sys.argv[1])
+        process_backtest(sys.argv[1], check_risk)
     else:
-        process_all_backtest()
+        stats = process_all_backtest(check_risk)
 else:
     code = input('Enter stock to test: ')
     if code != '':
         if code != 'ALL':
-            process_backtest(code)
+            process_backtest(code, check_risk)
         else:
-            stats = process_all_backtest()
-            stats_df = pd.DataFrame(stats)
-            pd.set_option('display.max_rows', stats_df.shape[0]+1)
-            print(stats_df)
+            stats = process_all_backtest(check_risk)
+
+if len(stats) != 0:
+    stats_df = pd.DataFrame(stats)
+    pd.set_option('display.max_rows', stats_df.shape[0]+1)
+    print(stats_df)

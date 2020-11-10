@@ -11,5 +11,6 @@ MAMA Strategy
 6. Check volume
 
 TODO:
-1. Win rate per test
-2. Run all test
+1. Win rate per test -- DONE
+2. Run all test -- DONE
+3. indicate to check risk or not -- IN PROGRESS
