@@ -4,7 +4,6 @@ import pymongo
 import pandas as pd
 import logging
 from datetime import datetime
-
 from stock_list import codes
 
 # database Connection
@@ -17,11 +16,15 @@ stocks_table = database.stocks
 logging.basicConfig(filename='executions.log', level=logging.DEBUG,
                     format='%(asctime)s %(message)s', datefmt='%m/%d/%Y %I:%M:%S %p')
 
+# Constants
 COMM_RATE = 1.19
 RISK = 4
 TARGET_VALUE = 1000000
 TARGET_PREVIOUS_VALUE = 800000
 START_DATE = 1451595600
+
+# Global
+all_stats = []
 
 
 def backtest(code, check_risk=True):
@@ -76,9 +79,10 @@ def backtest(code, check_risk=True):
     return txns
 
 
-def calculate_win_rate(txns):
+def calculate_win_rate(code, txns):
     if len(txns) == 0:
         return {
+            "code": code,
             "win_rate": 0,
             "wins": 0,
             "max_win": 0,
@@ -103,6 +107,7 @@ def calculate_win_rate(txns):
         win_rate = round((i/len(txns)) * 100, 2)
 
     return {
+        "code": code,
         "win_rate": win_rate,
         "wins": i,
         "max_win": max_win,
@@ -240,6 +245,7 @@ def process_backtest(codes_to_test, check_risk=True):
         print('Starting test of {}'.format(code))
 
         txn = backtest(code, check_risk)
+        get_stats(code, txn)
         txns = txns + txn
 
         logging.info('End of test of {}'.format(code))
@@ -249,6 +255,10 @@ def process_backtest(codes_to_test, check_risk=True):
     print('End of test for ALL stocks\n')
 
     return txns
+
+
+def get_stats(code, txn):
+    all_stats.append(calculate_win_rate(code, txn))
 
 
 def check_risk():
@@ -293,11 +303,20 @@ else:
         all_txns = process_backtest(stocks, check_risk)
 
 if len(all_txns) != 0:
-    stats = calculate_win_rate(all_txns)
+    stats = calculate_win_rate('ALL', all_txns)
 
     txns_df = pd.DataFrame(all_txns)
-    txns_df.to_excel("result.xlsx", engine='xlsxwriter')
+    # txns_df.to_excel("result.xlsx", engine='xlsxwriter')
     pd.set_option('display.max_rows', txns_df.shape[0]+1)
+
+    stats_df = pd.DataFrame(all_stats)
+    # txns_df.to_excel("result.xlsx", engine='xlsxwriter')
+    pd.set_option('display.max_rows', stats_df.shape[0]+1)
+
+    with pd.ExcelWriter('result.xlsx') as writer:  # pylint: disable=abstract-class-instantiated
+        stats_df.to_excel(writer, sheet_name='Summary')
+        txns_df.to_excel(writer, sheet_name='Details')
 
     print(txns_df)
     display_stats(stats)
+    print(stats_df)
