@@ -93,30 +93,36 @@ def calculate_win_rate(code, txns):
         }
 
     win_rate = 0
-    i = 0
+    winning_trade = 0
     total = 0
     df = pd.DataFrame(txns)
-    max_loss = df['pnl'].min()
-    max_win = df['pnl'].max()
+    max_loss = df['pnl'].min() < 0 and df['pnl'].min() or 0
+    max_win = df['pnl'].max() > 0 and df['pnl'].max() or 0
+    has_open_position = False
+    valid_txns = len(txns)
 
     for txn in txns:
-        total += txn['pnl']
         try:
-            if txn['pnl'] is not None and txn['pnl'] > 0:
-                i += 1
+            total += txn['pnl']
+            if txn['pnl'] > 0:
+                winning_trade += 1
         except:
+            has_open_position = True
             logging.info('Open position')
             print('Open position')
 
-    if i is not 0:
-        win_rate = round((i/len(txns)) * 100, 2)
+    valid_txns = has_open_position and (
+        valid_txns - 1) or valid_txns
+
+    if winning_trade is not 0:
+        win_rate = round(winning_trade/valid_txns * 100, 2)
 
     return {
         "code": code,
         "win_rate": win_rate,
-        "wins": i,
+        "wins": winning_trade,
         "max_win": max_win,
-        "loss": len(txns) - i,
+        "loss": valid_txns - winning_trade,
         "max_loss": max_loss,
         "total": round(total, 2)}
 
@@ -318,7 +324,9 @@ def double_cross_backtest(code, check_risk):
     for stock in stocks:
         action = buy and 'BUY' or 'SELL'
 
-        if stock['alma'] is not None and stock['macd'] is not None:
+        if (stock['alma'] is not None
+            and stock['macd'] is not None
+                and stock['ma20'] is not None):
             if stock['timestamp'] >= START_DATE:
                 if buy:
                     if not prev_alma_above_ma and is_above(stock['macd'], stock['macds']):
