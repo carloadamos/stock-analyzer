@@ -40,19 +40,19 @@ def mama_backtest(code, check_risk=True):
 
         if stock['timestamp'] >= START_DATE:
             if buy:
-                if not prev_macd_above_signal and macd_above_signal(stock):
-                    if (value_above_target(stock['value'], TARGET_VALUE)):
+                if not prev_macd_above_signal and is_above(stock['macd'], stock['macds']):
+                    if (is_above(stock['value'], TARGET_VALUE)):
                         prev_values = get_previous_values(stocks, i, 5)
                         valid = True
                         invalid_ctr = 0
 
                         for value in prev_values:
-                            if not value_above_target(value, TARGET_PREVIOUS_VALUE):
+                            if not is_above(value, TARGET_PREVIOUS_VALUE):
                                 invalid_ctr += 1
                             if invalid_ctr > 1:
                                 valid = False
                         if valid:
-                            if close_above_alma(stock):
+                            if is_above(stock['close'], stock['alma']):
                                 risk = round(calculate_risk(stocks, i), 2)
                                 if check_risk:
                                     if risk >= -RISK:
@@ -69,11 +69,12 @@ def mama_backtest(code, check_risk=True):
             else:
                 if close_below_alma(stock) and close_below_alma(stocks[i-1]):
                     txn = trade(stock, action)
+                    txns[len(txns)-1]['sell_date'] = txn['sell_date']
                     txns[len(txns)-1]['sell_price'] = txn['sell_price']
                     txns[len(txns)-1]['pnl'] = compute_pnl(txn, txns)
                     buy = not buy
 
-        prev_macd_above_signal = macd_above_signal(stock)
+        prev_macd_above_signal = is_above(stock['macd'], stock['macds'])
         i += 1
 
     return txns
@@ -99,9 +100,9 @@ def calculate_win_rate(code, txns):
     max_win = df['pnl'].max()
 
     for txn in txns:
+        total += txn['pnl']
         try:
             if txn['pnl'] is not None and txn['pnl'] > 0:
-                total += txn['pnl']
                 i += 1
         except:
             logging.info('Open position')
@@ -169,31 +170,23 @@ def calculate_risk(stocks, cur_pos):
             prev_candle = stocks[cur_pos-i]
             if close_below_alma(prev_candle):
                 break
-            if close_above_alma(prev_candle) and low_below_alma(prev_candle):
+            if is_above(prev_candle['close'], prev_candle['alma']) and low_below_alma(prev_candle):
                 risk = compute_profit(entry_point, prev_candle['alma'])
         i += 1
 
     return risk
 
 
-def macd_above_signal(stock):
-    if stock['macd'] > stock['macds']:
-        return True
-    return False
+def is_green_candle(stock):
+    return stock['close'] > stock['open']
+
+
+def candle_above_indicator(stock, indicator):
+    return is_green_candle(stock) and stock['open'] > indicator
 
 
 def previous_breakout_candle(stock, indicator):
     return stock['open'] <= indicator and stock['close'] >= indicator
-
-
-def close_above_alma(stock):
-    """
-    Identify if close price is above ALMA.
-    :param stock: Stock object
-    :return: boolean
-    """
-    if stock['alma'] is not None:
-        return stock['close'] > stock['alma']
 
 
 def close_below_alma(stock):
@@ -211,40 +204,21 @@ def low_below_alma(stock):
         return stock['low'] < stock['alma']
 
 
-def close_above_ma(stock, length):
-    """
-    Identify if close price is above MA.
-    :param stock: Stock object
-    :param length: Size of MA
-    """
-    if length == 20:
-        if stock['ma20'] is not None:
-            return stock['close'] > stock['ma20']
-    elif length == 50:
-        if stock['ma50'] is not None:
-            return stock['close'] > stock['ma50']
-    elif length == 100:
-        if stock['ma100'] is not None:
-            return stock['close'] > stock['ma100']
-    else:
-        return False
+def is_above(above, below):
+    return above > below
 
 
 def trade(stock, action):
     txn = {}
 
     if action == 'BUY':
-        txn = {"code": stock['code'], "date": convert_timestamp(stock['timestamp']),
+        txn = {"code": stock['code'], "buy_date": convert_timestamp(stock['timestamp']),
                "buy_price": stock['close']}
     else:
-        txn = {"code": stock['code'], "date": convert_timestamp(stock['timestamp']),
+        txn = {"code": stock['code'], "sell_date": convert_timestamp(stock['timestamp']),
                "sell_price": stock['close']}
 
     return txn
-
-
-def value_above_target(value, min_target):
-    return value > min_target
 
 
 def mama_process_backtest(codes_to_test, check_risk=True):
@@ -282,8 +256,9 @@ def check_risk():
     return check_risk
 
 
-def display_stats(stats):
-    print('\nWin rate: {0}% \nWins: {1}\nMax Win: {2}%\nLoss: {3}\nMax Loss: {4}%\nTotal: {5}%\n'
+def display_stats(strategy, stats):
+    print('{} strategy'.format(strategy))
+    print('Win rate: {0}% \nWins: {1}\nMax Win: {2}%\nLoss: {3}\nMax Loss: {4}%\nTotal: {5}%\n'
           .format(
               stats['win_rate'],
               stats['wins'],
@@ -311,18 +286,25 @@ def mama():
     if len(all_txns) != 0:
         stats = calculate_win_rate(code != 'ALL' and code or 'ALL', all_txns)
 
-        txns_df = pd.DataFrame(all_txns)
-        stats_df = pd.DataFrame(all_stats)
+        txnsdf = pd.DataFrame(all_txns)
+        txnsdf['risk'] = txnsdf['risk'].astype(str) + '%'
+        txnsdf['pnl'] = txnsdf['pnl'].astype(str) + '%'
+        txnsdf.style.format({'pnl': "{0:+g}"})
+        statsdf = pd.DataFrame(all_stats)
+        statsdf['max_win'] = statsdf['max_win'].astype(str) + '%'
+        statsdf['max_loss'] = statsdf['max_loss'].astype(str) + '%'
+        statsdf['total'] = statsdf['total'].astype(str) + '%'
+        pd.set_option('display.max_rows', 1000)
 
         with pd.ExcelWriter('result.xlsx') as writer:  # pylint: disable=abstract-class-instantiated
-            stats_df.to_excel(writer, sheet_name='Summary')
-            txns_df.to_excel(writer, sheet_name='Details')
+            statsdf.to_excel(writer, sheet_name='Summary')
+            txnsdf.to_excel(writer, sheet_name='Details')
 
         pd.set_option('display.max_rows', 1000)
 
-        print(txns_df)
-        display_stats(stats)
-        print(stats_df)
+        print(txnsdf)
+        display_stats('MAMA', stats)
+        print(statsdf)
 
 
 def double_cross_backtest(code, check_risk):
@@ -337,8 +319,10 @@ def double_cross_backtest(code, check_risk):
 
         if stock['timestamp'] >= START_DATE:
             if buy:
-                if macd_above_signal(stock):
-                    if close_above_alma(stock) and close_above_ma(stock, 20):
+                if is_above(stock['macd'], stock['macds']):
+                    if (candle_above_indicator(stock, stock['alma'])
+                            and candle_above_indicator(stock, stock['ma20'])
+                            and is_above(stock['alma'], stock['ma20'])):
                         risk = round(calculate_risk(stocks, i), 2)
                         if check_risk:
                             if risk >= -RISK:
@@ -355,6 +339,7 @@ def double_cross_backtest(code, check_risk):
             else:
                 if close_below_alma(stock) and close_below_alma(stocks[i-1]):
                     txn = trade(stock, action)
+                    txns[len(txns)-1]['sell_date'] = txn['sell_date']
                     txns[len(txns)-1]['sell_price'] = txn['sell_price']
                     txns[len(txns)-1]['pnl'] = compute_pnl(txn, txns)
                     buy = not buy
@@ -381,10 +366,16 @@ def double_cross():
         stats = calculate_win_rate(code != 'ALL' and code or 'ALL', all_txns)
 
         txnsdf = pd.DataFrame(all_txns)
+        txnsdf['risk'] = txnsdf['risk'].astype(str) + '%'
+        txnsdf['pnl'] = txnsdf['pnl'].astype(str) + '%'
+        txnsdf.style.format({'pnl': "{0:+g}"})
         statsdf = pd.DataFrame(all_stats)
+        statsdf['max_win'] = statsdf['max_win'].astype(str) + '%'
+        statsdf['max_loss'] = statsdf['max_loss'].astype(str) + '%'
+        statsdf['total'] = statsdf['total'].astype(str) + '%'
         pd.set_option('display.max_rows', 1000)
         print(txnsdf)
-        display_stats(stats)
+        display_stats('DOUBLE CROSS', stats)
         print(statsdf)
 
 
