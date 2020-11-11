@@ -144,6 +144,7 @@ def double_cross():
     code = input('Enter stock to test: ')
     include_risk = check_risk()
     save = save_file()
+    name = ''
 
     if save:
         name = file_name()
@@ -178,6 +179,7 @@ def double_cross():
         print(txnsdf)
         display_stats('DOUBLE CROSS', stats)
         print(statsdf)
+        show_parameters('MAMA', code, include_risk, save, name)
 
 
 def double_cross_backtest(code, check_risk):
@@ -316,6 +318,7 @@ def mama():
     code = input('Enter stock to test: ')
     include_risk = check_risk()
     save = save_file()
+    name = ''
 
     if save:
         name = file_name()
@@ -351,6 +354,7 @@ def mama():
         print(txnsdf)
         display_stats('MAMA', stats)
         print(statsdf)
+        show_parameters('MAMA', code, include_risk, save, name)
 
 
 def mama_backtest(code, check_risk=True):
@@ -435,6 +439,13 @@ def save_file():
     save = input('Save result to excel file? [Y/N]: ')
     save = save.upper()
     return save == 'Y' and True or False
+
+
+def show_parameters(strategy, stock, risk, save_file, filename=''):
+    print('\nPARAMETERS USED IN THIS TEST \nStrategy: {0} \nStock: {1} \nRisk: {2} \nSave File: {3} \nFilename: {4}'
+          .format(
+              strategy, stock, risk, save_file, filename
+          ))
 
 
 def trade(stock, action):
