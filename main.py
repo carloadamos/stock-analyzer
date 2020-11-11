@@ -281,42 +281,45 @@ def display_stats(stats):
               stats['total']))
 
 
-all_txns = []
-check_risk = check_risk()
-stocks = []
+def mama():
+    all_txns = []
+    include_risk = check_risk()
+    stocks = []
 
-if len(sys.argv) > 1:
-    code = sys.argv[1].upper()
-    stocks = code == 'ALL' and codes or [code]
-
-    all_txns = process_backtest(stocks, check_risk)
-
-else:
     code = input('Enter stock to test: ')
 
     if code != '':
         code = code.upper()
         stocks = code == 'ALL' and codes or [code]
 
-        all_txns = process_backtest(stocks, check_risk)
+        all_txns = process_backtest(stocks, include_risk)
     else:
-        all_txns = process_backtest(stocks, check_risk)
+        all_txns = process_backtest(stocks, include_risk)
 
-if len(all_txns) != 0:
-    stats = calculate_win_rate('ALL', all_txns)
+    if len(all_txns) != 0:
+        stats = calculate_win_rate('ALL', all_txns)
 
-    txns_df = pd.DataFrame(all_txns)
-    # txns_df.to_excel("result.xlsx", engine='xlsxwriter')
-    pd.set_option('display.max_rows', txns_df.shape[0]+1)
+        txns_df = pd.DataFrame(all_txns)
+        stats_df = pd.DataFrame(all_stats)
 
-    stats_df = pd.DataFrame(all_stats)
-    # txns_df.to_excel("result.xlsx", engine='xlsxwriter')
-    pd.set_option('display.max_rows', stats_df.shape[0]+1)
+        with pd.ExcelWriter('result.xlsx') as writer:  # pylint: disable=abstract-class-instantiated
+            stats_df.to_excel(writer, sheet_name='Summary')
+            txns_df.to_excel(writer, sheet_name='Details')
 
-    with pd.ExcelWriter('result.xlsx') as writer:  # pylint: disable=abstract-class-instantiated
-        stats_df.to_excel(writer, sheet_name='Summary')
-        txns_df.to_excel(writer, sheet_name='Details')
+        pd.set_option('display.max_rows', 1000)
 
-    print(txns_df)
-    display_stats(stats)
-    print(stats_df)
+        print(txns_df)
+        display_stats(stats)
+        print(stats_df)
+
+
+def main():
+    strat = input('Which strategy would you like to test? [1 - MAMA]: ')
+
+    if strat == '1':
+        mama()
+    else:
+        print('No other strategy yet')
+
+
+main()
