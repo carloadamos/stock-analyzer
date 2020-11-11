@@ -27,7 +27,7 @@ START_DATE = 1451595600
 all_stats = []
 
 
-def backtest(code, check_risk=True):
+def mama_backtest(code, check_risk=True):
     stocks = fetch_stocks(code)
     buy = True
     i = 0
@@ -69,8 +69,8 @@ def backtest(code, check_risk=True):
             else:
                 if close_below_alma(stock) and close_below_alma(stocks[i-1]):
                     txn = trade(stock, action)
-                    txn['pnl'] = compute_pnl(txn, txns)
-                    txns.append(txn)
+                    txns[len(txns)-1]['sell_price'] = txn['sell_price']
+                    txns[len(txns)-1]['pnl'] = compute_pnl(txn, txns)
                     buy = not buy
 
         prev_macd_above_signal = macd_above_signal(stock)
@@ -98,10 +98,9 @@ def calculate_win_rate(code, txns):
     max_loss = df['pnl'].min()
     max_win = df['pnl'].max()
     for txn in txns:
-        if txn['action'] == 'SELL':
-            if txn['pnl'] > 0:
-                total += txn['pnl']
-                i += 1
+        if txn['pnl'] > 0:
+            total += txn['pnl']
+            i += 1
 
     if i is not 0:
         win_rate = round((i/len(txns)) * 100, 2)
@@ -121,7 +120,7 @@ def convert_timestamp(timestamp):
 
 
 def compute_pnl(txn, txns):
-    return round(compute_profit(txns[-1:][0]['price'], txn['price']) - COMM_RATE, 2)
+    return round(compute_profit(txns[-1:][0]['buy_price'], txn['sell_price']) - COMM_RATE, 2)
 
 
 def compute_profit(buy_price, sell_price):
@@ -207,7 +206,7 @@ def low_below_alma(stock):
         return stock['low'] < stock['alma']
 
 
-def price_above_moving_average(stock, length):
+def close_above_ma(stock, length):
     """
     Identify if close price is above MA.
     :param stock: Stock object
@@ -227,32 +226,40 @@ def price_above_moving_average(stock, length):
 
 
 def trade(stock, action):
-    return {"code": stock['code'], "date": convert_timestamp(stock['timestamp']),
-            "action": action, "price": stock['close']}
+    txn = {}
+
+    if action == 'BUY':
+        txn = {"code": stock['code'], "date": convert_timestamp(stock['timestamp']),
+               "buy_price": stock['close']}
+    else:
+        txn = {"code": stock['code'], "date": convert_timestamp(stock['timestamp']),
+               "sell_price": stock['close']}
+
+    return txn
 
 
 def value_above_target(value, min_target):
     return value > min_target
 
 
-def process_backtest(codes_to_test, check_risk=True):
-    logging.info('Starting test for ALL stocks')
-    print('Starting test for ALL stocks\n')
+def mama_process_backtest(codes_to_test, check_risk=True):
+    logging.info('Starting test')
+    print('Starting test\n')
 
     txns = []
     for code in codes_to_test:
         logging.info('Starting test of {}'.format(code))
         print('Starting test of {}'.format(code))
 
-        txn = backtest(code, check_risk)
+        txn = mama_backtest(code, check_risk)
         get_stats(code, txn)
         txns = txns + txn
 
         logging.info('End of test of {}'.format(code))
         print('End of test of {}'.format(code))
 
-    logging.info('End of test for ALL stocks')
-    print('End of test for ALL stocks\n')
+    logging.info('End of test')
+    print('\nEnd of test')
 
     return txns
 
@@ -283,21 +290,21 @@ def display_stats(stats):
 
 def mama():
     all_txns = []
-    include_risk = check_risk()
     stocks = []
 
     code = input('Enter stock to test: ')
+    include_risk = check_risk()
 
     if code != '':
         code = code.upper()
         stocks = code == 'ALL' and codes or [code]
 
-        all_txns = process_backtest(stocks, include_risk)
+        all_txns = mama_process_backtest(stocks, include_risk)
     else:
-        all_txns = process_backtest(stocks, include_risk)
+        all_txns = mama_process_backtest(stocks, include_risk)
 
     if len(all_txns) != 0:
-        stats = calculate_win_rate('ALL', all_txns)
+        stats = calculate_win_rate(code != 'ALL' and code or 'ALL', all_txns)
 
         txns_df = pd.DataFrame(all_txns)
         stats_df = pd.DataFrame(all_stats)
@@ -313,11 +320,69 @@ def mama():
         print(stats_df)
 
 
+def double_cross_backtest(code, check_risk):
+    stocks = fetch_stocks(code)
+    buy = True
+    i = 0
+
+    txns = []
+    # Loop
+    for stock in stocks:
+        action = buy and 'BUY' or 'SELL'
+
+        if stock['timestamp'] >= START_DATE:
+            if buy:
+                if macd_above_signal(stock):
+                    if close_above_alma(stock) and close_above_ma(stock, 20):
+                        risk = round(calculate_risk(stocks, i), 2)
+                        if check_risk:
+                            if risk >= -RISK:
+                                txn = trade(stock, action)
+                                txn['risk'] = risk
+                                txns.append(txn)
+                                buy = not buy
+                        else:
+                            txn = trade(stock, action)
+                            txns.append(txn)
+                            risk = calculate_risk(stocks, i)
+                            txn['risk'] = risk
+                            buy = not buy
+            else:
+                if close_below_alma(stock) and close_below_alma(stocks[i-1]):
+                    txn = trade(stock, action)
+                    txns[len(txns)-1]['sell_price'] = txn['sell_price']
+                    txns[len(txns)-1]['pnl'] = compute_pnl(txn, txns)
+                    buy = not buy
+
+        i += 1
+
+    return txns
+
+
+def double_cross():
+    code = input('Enter stock to test: ')
+    include_risk = check_risk()
+    txns = double_cross_backtest(code.upper(), include_risk)
+    get_stats(code, txns)
+    stats = calculate_win_rate(code != 'ALL' and code or 'ALL', txns)
+
+    print('stats', stats)
+    txnsdf = pd.DataFrame(txns)
+    statsdf = pd.DataFrame(all_stats)
+    pd.set_option('display.max_rows', 1000)
+    print(txnsdf)
+    display_stats(stats)
+    print(statsdf)
+
+
 def main():
-    strat = input('Which strategy would you like to test? [1 - MAMA]: ')
+    strat = input(
+        'Which strategy would you like to test?\n[1 - MAMA]\n[2 - DOUBLE CROSS]: ')
 
     if strat == '1':
         mama()
+    elif strat == '2':
+        double_cross()
     else:
         print('No other strategy yet')
 
