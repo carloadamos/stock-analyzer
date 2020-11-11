@@ -155,11 +155,13 @@ def double_cross():
         stats = calculate_win_rate(code != 'ALL' and code or 'ALL', all_txns)
 
         txnsdf = pd.DataFrame(all_txns)
+        statsdf = pd.DataFrame(all_stats)
+
         txnsdf['risk'] = txnsdf['risk'].astype(str) + '%'
         txnsdf['pnl'] = txnsdf['pnl'].astype(str) + '%'
         txnsdf.style.format({'pnl': "{0:+g}"})
 
-        statsdf = pd.DataFrame(all_stats)
+        statsdf['win_rate'] = statsdf['win_rate'].astype(str) + '%'
         statsdf['max_win'] = statsdf['max_win'].astype(str) + '%'
         statsdf['max_loss'] = statsdf['max_loss'].astype(str) + '%'
         statsdf['total'] = statsdf['total'].astype(str) + '%'
@@ -321,14 +323,16 @@ def mama():
         stats = calculate_win_rate(code != 'ALL' and code or 'ALL', all_txns)
 
         txnsdf = pd.DataFrame(all_txns)
+        statsdf = pd.DataFrame(all_stats)
+
         txnsdf['risk'] = txnsdf['risk'].astype(str) + '%'
         txnsdf['pnl'] = txnsdf['pnl'].astype(str) + '%'
         txnsdf.style.format({'pnl': "{0:+g}"})
-        statsdf = pd.DataFrame(all_stats)
+
+        statsdf['win_rate'] = statsdf['win_rate'].astype(str) + '%'
         statsdf['max_win'] = statsdf['max_win'].astype(str) + '%'
         statsdf['max_loss'] = statsdf['max_loss'].astype(str) + '%'
         statsdf['total'] = statsdf['total'].astype(str) + '%'
-        pd.set_option('display.max_rows', 1000)
 
         with pd.ExcelWriter('mama_test.xlsx') as writer:  # pylint: disable=abstract-class-instantiated
             statsdf.to_excel(writer, sheet_name='Summary')
