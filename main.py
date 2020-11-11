@@ -97,10 +97,15 @@ def calculate_win_rate(code, txns):
     df = pd.DataFrame(txns)
     max_loss = df['pnl'].min()
     max_win = df['pnl'].max()
+
     for txn in txns:
-        if txn['pnl'] > 0:
-            total += txn['pnl']
-            i += 1
+        try:
+            if txn['pnl'] is not None and txn['pnl'] > 0:
+                total += txn['pnl']
+                i += 1
+        except:
+            logging.info('Open position')
+            print('Open position')
 
     if i is not 0:
         win_rate = round((i/len(txns)) * 100, 2)
@@ -243,8 +248,8 @@ def value_above_target(value, min_target):
 
 
 def mama_process_backtest(codes_to_test, check_risk=True):
-    logging.info('Starting test')
-    print('Starting test\n')
+    logging.info('Starting MAMA test')
+    print('Starting MAMA test\n')
 
     txns = []
     for code in codes_to_test:
@@ -258,8 +263,8 @@ def mama_process_backtest(codes_to_test, check_risk=True):
         logging.info('End of test of {}'.format(code))
         print('End of test of {}'.format(code))
 
-    logging.info('End of test')
-    print('\nEnd of test')
+    logging.info('End of MAMA test')
+    print('\nEnd of MAMA test')
 
     return txns
 
@@ -360,19 +365,49 @@ def double_cross_backtest(code, check_risk):
 
 
 def double_cross():
+    all_txns = []
     code = input('Enter stock to test: ')
     include_risk = check_risk()
-    txns = double_cross_backtest(code.upper(), include_risk)
-    get_stats(code, txns)
-    stats = calculate_win_rate(code != 'ALL' and code or 'ALL', txns)
 
-    print('stats', stats)
-    txnsdf = pd.DataFrame(txns)
-    statsdf = pd.DataFrame(all_stats)
-    pd.set_option('display.max_rows', 1000)
-    print(txnsdf)
-    display_stats(stats)
-    print(statsdf)
+    if code != '':
+        code = code.upper()
+        stocks = code == 'ALL' and codes or [code]
+
+        all_txns = double_cross_process_backtest(stocks, include_risk)
+    else:
+        all_txns = double_cross_process_backtest(stocks, include_risk)
+
+    if len(all_txns) != 0:
+        stats = calculate_win_rate(code != 'ALL' and code or 'ALL', all_txns)
+
+        txnsdf = pd.DataFrame(all_txns)
+        statsdf = pd.DataFrame(all_stats)
+        pd.set_option('display.max_rows', 1000)
+        print(txnsdf)
+        display_stats(stats)
+        print(statsdf)
+
+
+def double_cross_process_backtest(codes_to_test, include_risk):
+    logging.info('Starting DOUBLE CROSS test')
+    print('Starting DOUBLE CROSS test\n')
+
+    txns = []
+    for code in codes_to_test:
+        logging.info('Starting test of {}'.format(code))
+        print('Starting test of {}'.format(code))
+
+        txn = double_cross_backtest(code, check_risk)
+        get_stats(code, txn)
+        txns = txns + txn
+
+        logging.info('End of test of {}'.format(code))
+        print('End of test of {}'.format(code))
+
+    logging.info('End of DOUBLE CROSS test')
+    print('\nEnd of DOUBLE CROSS test')
+
+    return txns
 
 
 def main():
