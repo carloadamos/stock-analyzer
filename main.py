@@ -257,7 +257,7 @@ def check_risk():
 
 
 def display_stats(strategy, stats):
-    print('{} strategy'.format(strategy))
+    print('\n{} strategy'.format(strategy))
     print('Win rate: {0}% \nWins: {1}\nMax Win: {2}%\nLoss: {3}\nMax Loss: {4}%\nTotal: {5}%\n'
           .format(
               stats['win_rate'],
