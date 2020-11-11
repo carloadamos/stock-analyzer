@@ -296,7 +296,7 @@ def mama():
         statsdf['total'] = statsdf['total'].astype(str) + '%'
         pd.set_option('display.max_rows', 1000)
 
-        with pd.ExcelWriter('result.xlsx') as writer:  # pylint: disable=abstract-class-instantiated
+        with pd.ExcelWriter('mama_test.xlsx') as writer:  # pylint: disable=abstract-class-instantiated
             statsdf.to_excel(writer, sheet_name='Summary')
             txnsdf.to_excel(writer, sheet_name='Details')
 
@@ -312,6 +312,7 @@ def double_cross_backtest(code, check_risk):
     buy = True
     i = 0
 
+    prev_alma_above_ma = False
     txns = []
     # Loop
     for stock in stocks:
@@ -319,7 +320,7 @@ def double_cross_backtest(code, check_risk):
 
         if stock['timestamp'] >= START_DATE:
             if buy:
-                if is_above(stock['macd'], stock['macds']):
+                if not prev_alma_above_ma and is_above(stock['macd'], stock['macds']):
                     if (candle_above_indicator(stock, stock['alma'])
                             and candle_above_indicator(stock, stock['ma20'])
                             and is_above(stock['alma'], stock['ma20'])):
@@ -343,6 +344,9 @@ def double_cross_backtest(code, check_risk):
                     txns[len(txns)-1]['sell_price'] = txn['sell_price']
                     txns[len(txns)-1]['pnl'] = compute_pnl(txn, txns)
                     buy = not buy
+
+        if stock['alma'] is not None and stock['ma20'] is not None:
+            prev_alma_above_ma = is_above(stock['alma'], stock['ma20'])
 
         i += 1
 
@@ -369,11 +373,18 @@ def double_cross():
         txnsdf['risk'] = txnsdf['risk'].astype(str) + '%'
         txnsdf['pnl'] = txnsdf['pnl'].astype(str) + '%'
         txnsdf.style.format({'pnl': "{0:+g}"})
+
         statsdf = pd.DataFrame(all_stats)
         statsdf['max_win'] = statsdf['max_win'].astype(str) + '%'
         statsdf['max_loss'] = statsdf['max_loss'].astype(str) + '%'
         statsdf['total'] = statsdf['total'].astype(str) + '%'
+
+        with pd.ExcelWriter('double_cross_test.xlsx') as writer:  # pylint: disable=abstract-class-instantiated
+            statsdf.to_excel(writer, sheet_name='Summary')
+            txnsdf.to_excel(writer, sheet_name='Details')
+
         pd.set_option('display.max_rows', 1000)
+
         print(txnsdf)
         display_stats('DOUBLE CROSS', stats)
         print(statsdf)
