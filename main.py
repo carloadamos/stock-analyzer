@@ -318,32 +318,33 @@ def double_cross_backtest(code, check_risk):
     for stock in stocks:
         action = buy and 'BUY' or 'SELL'
 
-        if stock['timestamp'] >= START_DATE:
-            if buy:
-                if not prev_alma_above_ma and is_above(stock['macd'], stock['macds']):
-                    if (candle_above_indicator(stock, stock['alma'])
-                            and candle_above_indicator(stock, stock['ma20'])
-                            and is_above(stock['alma'], stock['ma20'])):
-                        risk = round(calculate_risk(stocks, i), 2)
-                        if check_risk:
-                            if risk >= -RISK:
+        if stock['alma'] is not None and stock['macd'] is not None:
+            if stock['timestamp'] >= START_DATE:
+                if buy:
+                    if not prev_alma_above_ma and is_above(stock['macd'], stock['macds']):
+                        if (candle_above_indicator(stock, stock['alma'])
+                                and candle_above_indicator(stock, stock['ma20'])
+                                and is_above(stock['alma'], stock['ma20'])):
+                            risk = round(calculate_risk(stocks, i), 2)
+                            if check_risk:
+                                if risk >= -RISK:
+                                    txn = trade(stock, action)
+                                    txn['risk'] = risk
+                                    txns.append(txn)
+                                    buy = not buy
+                            else:
                                 txn = trade(stock, action)
-                                txn['risk'] = risk
                                 txns.append(txn)
+                                risk = calculate_risk(stocks, i)
+                                txn['risk'] = risk
                                 buy = not buy
-                        else:
-                            txn = trade(stock, action)
-                            txns.append(txn)
-                            risk = calculate_risk(stocks, i)
-                            txn['risk'] = risk
-                            buy = not buy
-            else:
-                if close_below_alma(stock) and close_below_alma(stocks[i-1]):
-                    txn = trade(stock, action)
-                    txns[len(txns)-1]['sell_date'] = txn['sell_date']
-                    txns[len(txns)-1]['sell_price'] = txn['sell_price']
-                    txns[len(txns)-1]['pnl'] = compute_pnl(txn, txns)
-                    buy = not buy
+                else:
+                    if close_below_alma(stock) and close_below_alma(stocks[i-1]):
+                        txn = trade(stock, action)
+                        txns[len(txns)-1]['sell_date'] = txn['sell_date']
+                        txns[len(txns)-1]['sell_price'] = txn['sell_price']
+                        txns[len(txns)-1]['pnl'] = compute_pnl(txn, txns)
+                        buy = not buy
 
         if stock['alma'] is not None and stock['ma20'] is not None:
             prev_alma_above_ma = is_above(stock['alma'], stock['ma20'])
