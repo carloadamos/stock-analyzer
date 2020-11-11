@@ -140,15 +140,17 @@ def display_stats(strategy, stats):
 
 def double_cross():
     all_txns = []
+
     code = input('Enter stock to test: ')
     include_risk = check_risk()
+    save = save_file()
+
+    if save:
+        name = file_name()
 
     if code != '':
         code = code.upper()
         stocks = code == 'ALL' and codes or [code]
-
-        all_txns = double_cross_process_backtest(stocks, include_risk)
-    else:
         all_txns = double_cross_process_backtest(stocks, include_risk)
 
     if len(all_txns) != 0:
@@ -166,9 +168,10 @@ def double_cross():
         statsdf['max_loss'] = statsdf['max_loss'].astype(str) + '%'
         statsdf['total'] = statsdf['total'].astype(str) + '%'
 
-        with pd.ExcelWriter('double_cross_test.xlsx') as writer:  # pylint: disable=abstract-class-instantiated
-            statsdf.to_excel(writer, sheet_name='Summary')
-            txnsdf.to_excel(writer, sheet_name='Details')
+        if save:
+            with pd.ExcelWriter('{0}.xlsx'.format(name)) as writer:  # pylint: disable=abstract-class-instantiated
+                statsdf.to_excel(writer, sheet_name='Summary')
+                txnsdf.to_excel(writer, sheet_name='Details')
 
         pd.set_option('display.max_rows', 1000)
 
@@ -207,7 +210,6 @@ def double_cross_backtest(code, check_risk):
                             else:
                                 txn = trade(stock, action)
                                 txns.append(txn)
-                                risk = calculate_risk(stocks, i)
                                 txn['risk'] = risk
                                 buy = not buy
                 else:
@@ -262,6 +264,10 @@ def fetch_stocks(code):
     return list(stocks_table.find({"code": code}))
 
 
+def file_name():
+    return input('Enter filename: ')
+
+
 def get_previous_values(stocks, cur_pos, length):
     prev_values = []
 
@@ -306,17 +312,18 @@ def main():
 
 def mama():
     all_txns = []
-    stocks = []
 
     code = input('Enter stock to test: ')
     include_risk = check_risk()
+    save = save_file()
+
+    if save:
+        name = file_name()
 
     if code != '':
         code = code.upper()
         stocks = code == 'ALL' and codes or [code]
 
-        all_txns = mama_process_backtest(stocks, include_risk)
-    else:
         all_txns = mama_process_backtest(stocks, include_risk)
 
     if len(all_txns) != 0:
@@ -334,9 +341,10 @@ def mama():
         statsdf['max_loss'] = statsdf['max_loss'].astype(str) + '%'
         statsdf['total'] = statsdf['total'].astype(str) + '%'
 
-        with pd.ExcelWriter('mama_test.xlsx') as writer:  # pylint: disable=abstract-class-instantiated
-            statsdf.to_excel(writer, sheet_name='Summary')
-            txnsdf.to_excel(writer, sheet_name='Details')
+        if save:
+            with pd.ExcelWriter('{0}.xlsx'.format(name)) as writer:  # pylint: disable=abstract-class-instantiated
+                statsdf.to_excel(writer, sheet_name='Summary')
+                txnsdf.to_excel(writer, sheet_name='Details')
 
         pd.set_option('display.max_rows', 1000)
 
@@ -381,7 +389,6 @@ def mama_backtest(code, check_risk=True):
                                 else:
                                     txn = trade(stock, action)
                                     txns.append(txn)
-                                    risk = calculate_risk(stocks, i)
                                     txn['risk'] = risk
                                     buy = not buy
             else:
@@ -422,6 +429,12 @@ def mama_process_backtest(codes_to_test, check_risk=True):
 
 def previous_breakout_candle(stock, indicator):
     return stock['open'] <= indicator and stock['close'] >= indicator
+
+
+def save_file():
+    save = input('Save result to excel file? [Y/N]: ')
+    save = save.upper()
+    return save == 'Y' and True or False
 
 
 def trade(stock, action):
