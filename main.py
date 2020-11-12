@@ -1,10 +1,11 @@
 # Imports
 import sys
+from stock_list import codes
+from datetime import datetime
+import json
+import logging
 import pymongo
 import pandas as pd
-import logging
-from datetime import datetime
-from stock_list import codes
 
 # database Connection
 # connection_url = 'mongodb+srv://admin:admin@cluster0.70gug.mongodb.net/exercise-tracker?retryWrites=true&w=majority'
@@ -307,40 +308,67 @@ def main():
     strat = input(
         'Which strategy would you like to test?\n[1 - MAMA]\n[2 - DOUBLE CROSS]: ')
 
+    setup = ''
     if strat == '1':
-        mama()
+        with open('mama.config.json') as file:
+            setup = json.loads(file.read())
+
+        mama(setup)
     elif strat == '2':
         double_cross()
     else:
         print('No other strategy yet')
 
 
-def mama():
-    all_txns = []
+def mama(setup):
+    txns = []
+    name = ''
+    buy = []
+    sell = []
 
-    code = input('Enter stock to test: ')
+    if setup['buy'] is None or setup['sell'] is None:
+        logging.error('Error in configuration file')
+        print('Error in configuration file')
+    else:
+        buy = setup['buy']
+        sell = setup['sell']
+
+    # User input
+    code = stock_to_test()
     include_risk = check_risk()
     save = save_file()
-    name = ''
 
     if save:
         name = file_name()
 
     if code != '':
-        code = code.upper()
         stocks = code == 'ALL' and codes or [code]
 
-        all_txns = mama_process_backtest(stocks, include_risk)
+        logging.info('Starting MAMA test')
+        print('Starting MAMA test\n')
 
-    if len(all_txns) != 0:
-        stats = calculate_win_rate(code != 'ALL' and code or 'ALL', all_txns)
+        for code in stocks:
+            logging.info('Starting test of {}'.format(code))
+            print('Starting test of {}'.format(code))
 
-        txnsdf = pd.DataFrame(all_txns)
+            txn = mama_backtest(code, buy, sell, include_risk)
+            get_stats(code, txn)
+            txns = txns + txn
+
+            logging.info('End of test of {}'.format(code))
+            print('End of test of {}'.format(code))
+
+        logging.info('End of MAMA test')
+        print('\nEnd of MAMA test')
+
+    if len(txns) != 0:
+        stats = calculate_win_rate(code != 'ALL' and code or 'ALL', txns)
+
+        txnsdf = pd.DataFrame(txns)
         statsdf = pd.DataFrame(all_stats)
 
         txnsdf['risk'] = txnsdf['risk'].astype(str) + '%'
         txnsdf['pnl'] = txnsdf['pnl'].astype(str) + '%'
-        txnsdf.style.format({'pnl': "{0:+g}"})
 
         statsdf['win_rate'] = statsdf['win_rate'].astype(str) + '%'
         statsdf['max_win'] = statsdf['max_win'].astype(str) + '%'
@@ -360,7 +388,24 @@ def mama():
         show_parameters('MAMA', code, include_risk, save, name)
 
 
-def mama_backtest(code, check_risk=True):
+def is_valid_risk(risk):
+    return risk >= -RISK
+
+
+def valid_previous_values(prev_values, target_prev_value):
+    invalid_ctr = 0
+    valid = True
+
+    for value in prev_values:
+        if not is_above(value, target_prev_value):
+            invalid_ctr += 1
+        if invalid_ctr > 1:
+            valid = False
+
+    return valid
+
+
+def mama_backtest(code, buy_conditions, sell_conditions, include_risk=True):
     stocks = fetch_stocks(code)
     buy = True
     i = 0
@@ -377,36 +422,69 @@ def mama_backtest(code, check_risk=True):
                 and stock['volume20'] is not None):
 
             if stock['timestamp'] >= START_DATE:
+
+                # Variables for eval
+                alma = stock['alma']
+                close = stock['close']
+                macd = stock['macd']
+                macds = stock['macds']
+                prev_values = get_previous_values(stocks, i, 5)
+                risk = round(calculate_risk(stocks, i), 2)
+                target_prev_values = TARGET_PREVIOUS_VALUE
+                target_value = TARGET_VALUE
+                value = stock['value']
+                volume = stock['volume']
+                volume20 = stock['volume20']
+
                 # BUYING STOCK
                 if buy:
-                    if not prev_macd_above_signal and is_above(stock['macd'], stock['macds']):
-                        if (is_above(stock['value'], TARGET_VALUE)):
-                            prev_values = get_previous_values(stocks, i, 5)
+                    valid = False
+                    for condition in buy_conditions:
+                        if not prev_macd_above_signal:
                             valid = True
-                            invalid_ctr = 0
+                            valid = eval(condition)
+                            if not valid:
+                                break
 
-                            for value in prev_values:
-                                if not is_above(value, TARGET_PREVIOUS_VALUE):
-                                    invalid_ctr += 1
-                                if invalid_ctr > 1:
-                                    valid = False
-                            if valid:
-                                if is_above(stock['close'], stock['alma']):
-                                    if is_above(stock['volume'], stock['volume20']):
-                                        risk = round(
-                                            calculate_risk(stocks, i), 2)
-                                        if check_risk:
-                                            if risk >= -RISK:
-                                                txn = trade(stock, action)
-                                                txn['risk'] = risk
-                                                txns.append(txn)
-                                                buy = not buy
-                                        else:
-                                            txn = trade(stock, action)
-                                            txns.append(txn)
-                                            txn['risk'] = risk
-                                            buy = not buy
-                # SELLING STOCK
+                    if valid and include_risk:
+                        if not is_valid_risk(risk):
+                            valid = False
+
+                    if valid:
+                        print('Valid buy')
+                        txn = trade(stock, action)
+                        txn['risk'] = risk
+                        print(txn)
+                        txns.append(txn)
+                        buy = not buy
+                        # if not prev_macd_above_signal and is_above(stock['macd'], stock['macds']):
+                        #     if (is_above(stock['value'], TARGET_VALUE)):
+                        #         prev_values = get_previous_values(stocks, i, 5)
+                        #         valid = True
+                        #         invalid_ctr = 0
+
+                        #         for value in prev_values:
+                        #             if not is_above(value, TARGET_PREVIOUS_VALUE):
+                        #                 invalid_ctr += 1
+                        #             if invalid_ctr > 1:
+                        #                 valid = False
+                        #         if valid:
+                        #             if is_above(stock['close'], stock['alma']):
+                        #                 if is_above(stock['volume'], stock['volume20']):
+                        #                     risk = round(
+                        #                         calculate_risk(stocks, i), 2)
+                        #                     if check_risk:
+                        #                         if risk >= -RISK:
+                        #                             txn = trade(stock, action)
+                        #                             txn['risk'] = risk
+                        #                             txns.append(txn)
+                        #                             buy = not buy
+                        #                     else:
+                        #                         txn = trade(stock, action)
+                        #                         txns.append(txn)
+                        #                         txn['risk'] = risk
+                        #                         buy = not buy
+                        # SELLING STOCK
                 else:
                     if close_below_alma(stock) and close_below_alma(stocks[i-1]):
                         txn = trade(stock, action)
@@ -417,28 +495,6 @@ def mama_backtest(code, check_risk=True):
 
         prev_macd_above_signal = is_above(stock['macd'], stock['macds'])
         i += 1
-
-    return txns
-
-
-def mama_process_backtest(codes_to_test, check_risk=True):
-    logging.info('Starting MAMA test')
-    print('Starting MAMA test\n')
-
-    txns = []
-    for code in codes_to_test:
-        logging.info('Starting test of {}'.format(code))
-        print('Starting test of {}'.format(code))
-
-        txn = mama_backtest(code, check_risk)
-        get_stats(code, txn)
-        txns = txns + txn
-
-        logging.info('End of test of {}'.format(code))
-        print('End of test of {}'.format(code))
-
-    logging.info('End of MAMA test')
-    print('\nEnd of MAMA test')
 
     return txns
 
@@ -458,6 +514,11 @@ def show_parameters(strategy, stock, risk, save_file, filename=''):
           .format(
               strategy, stock, risk, save_file, filename
           ))
+
+
+def stock_to_test():
+    code = input('Enter stock to test: ')
+    return code != '' and code.upper() or ''
 
 
 def trade(stock, action):
