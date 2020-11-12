@@ -7,7 +7,8 @@ from datetime import datetime
 from stock_list import codes
 
 # database Connection
-connection_url = 'mongodb+srv://admin:admin@cluster0.70gug.mongodb.net/exercise-tracker?retryWrites=true&w=majority'
+# connection_url = 'mongodb+srv://admin:admin@cluster0.70gug.mongodb.net/exercise-tracker?retryWrites=true&w=majority'
+connection_url = 'mongodb://localhost:27017/'
 client = pymongo.MongoClient(connection_url)
 database = client.get_database('stock-analyzer')
 stocks_table = database.stocks
@@ -195,7 +196,9 @@ def double_cross_backtest(code, check_risk):
 
         if (stock['alma'] is not None
             and stock['macd'] is not None
-                and stock['ma20'] is not None):
+            and stock['ma20'] is not None
+                and stock['volume20'] is not None):
+
             if stock['timestamp'] >= START_DATE:
                 if buy:
                     if not prev_alma_above_ma and is_above(stock['macd'], stock['macds']):
@@ -368,40 +371,49 @@ def mama_backtest(code, check_risk=True):
     for stock in stocks:
         action = buy and 'BUY' or 'SELL'
 
-        if stock['timestamp'] >= START_DATE:
-            if buy:
-                if not prev_macd_above_signal and is_above(stock['macd'], stock['macds']):
-                    if (is_above(stock['value'], TARGET_VALUE)):
-                        prev_values = get_previous_values(stocks, i, 5)
-                        valid = True
-                        invalid_ctr = 0
+        if (stock['alma'] is not None
+            and stock['macd'] is not None
+            and stock['ma20'] is not None
+                and stock['volume20'] is not None):
 
-                        for value in prev_values:
-                            if not is_above(value, TARGET_PREVIOUS_VALUE):
-                                invalid_ctr += 1
-                            if invalid_ctr > 1:
-                                valid = False
-                        if valid:
-                            if is_above(stock['close'], stock['alma']):
-                                risk = round(calculate_risk(stocks, i), 2)
-                                if check_risk:
-                                    if risk >= -RISK:
-                                        txn = trade(stock, action)
-                                        txn['risk'] = risk
-                                        txns.append(txn)
-                                        buy = not buy
-                                else:
-                                    txn = trade(stock, action)
-                                    txns.append(txn)
-                                    txn['risk'] = risk
-                                    buy = not buy
-            else:
-                if close_below_alma(stock) and close_below_alma(stocks[i-1]):
-                    txn = trade(stock, action)
-                    txns[len(txns)-1]['sell_date'] = txn['sell_date']
-                    txns[len(txns)-1]['sell_price'] = txn['sell_price']
-                    txns[len(txns)-1]['pnl'] = compute_pnl(txn, txns)
-                    buy = not buy
+            if stock['timestamp'] >= START_DATE:
+                # BUYING STOCK
+                if buy:
+                    if not prev_macd_above_signal and is_above(stock['macd'], stock['macds']):
+                        if (is_above(stock['value'], TARGET_VALUE)):
+                            prev_values = get_previous_values(stocks, i, 5)
+                            valid = True
+                            invalid_ctr = 0
+
+                            for value in prev_values:
+                                if not is_above(value, TARGET_PREVIOUS_VALUE):
+                                    invalid_ctr += 1
+                                if invalid_ctr > 1:
+                                    valid = False
+                            if valid:
+                                if is_above(stock['close'], stock['alma']):
+                                    if is_above(stock['volume'], stock['volume20']):
+                                        risk = round(
+                                            calculate_risk(stocks, i), 2)
+                                        if check_risk:
+                                            if risk >= -RISK:
+                                                txn = trade(stock, action)
+                                                txn['risk'] = risk
+                                                txns.append(txn)
+                                                buy = not buy
+                                        else:
+                                            txn = trade(stock, action)
+                                            txns.append(txn)
+                                            txn['risk'] = risk
+                                            buy = not buy
+                # SELLING STOCK
+                else:
+                    if close_below_alma(stock) and close_below_alma(stocks[i-1]):
+                        txn = trade(stock, action)
+                        txns[len(txns)-1]['sell_date'] = txn['sell_date']
+                        txns[len(txns)-1]['sell_price'] = txn['sell_price']
+                        txns[len(txns)-1]['pnl'] = compute_pnl(txn, txns)
+                        buy = not buy
 
         prev_macd_above_signal = is_above(stock['macd'], stock['macds'])
         i += 1
