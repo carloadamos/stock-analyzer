@@ -194,49 +194,51 @@ def main():
         stocks = code == 'ALL' and codes or [code]
         info_logger('Starting DOUBLE CROSS test')
 
-    save = save_file()
-
-    if save:
-        filename = get_filename()
-
-    if strat == '1':
-        config_filename = 'mama.config.json'
-    elif strat == '2':
-        config_filename = 'double_cross.config.json'
-    else:
-        print('No strategy like that yet')
-
-    with open('{}'.format(config_filename)) as file:
-        setup = json.loads(file.read())
-
-    txns = backtest(setup, stocks)
-
-    if len(txns) != 0:
-        stats = calculate_win_rate(code != 'ALL' and code or 'ALL', txns)
-
-        txnsdf = pd.DataFrame(txns)
-        statsdf = pd.DataFrame(all_stats)
-
-        txnsdf['pnl'] = txnsdf['pnl'].astype(str) + '%'
-        txnsdf.style.format({'pnl': "{0:+g}"})
-
-        statsdf['win_rate'] = statsdf['win_rate'].astype(str) + '%'
-        statsdf['max_win'] = statsdf['max_win'].astype(str) + '%'
-        statsdf['max_loss'] = statsdf['max_loss'].astype(str) + '%'
-        statsdf['total'] = statsdf['total'].astype(str) + '%'
+        save = save_file()
 
         if save:
-            with pd.ExcelWriter('results/{0}.xlsx'.format(filename)) as writer:  # pylint: disable=abstract-class-instantiated
-                statsdf.to_excel(writer, sheet_name='Summary')
-                txnsdf.to_excel(writer, sheet_name='Details')
+            filename = get_filename()
 
-        pd.set_option('display.max_rows', 1000)
+        if strat == '1':
+            config_filename = 'mama.config.json'
+        elif strat == '2':
+            config_filename = 'double_cross.config.json'
+        else:
+            print('No strategy like that yet')
 
-        print(txnsdf)
-        display_stats('DOUBLE CROSS', stats)
-        print(statsdf)
+        with open('{}'.format(config_filename)) as file:
+            setup = json.loads(file.read())
 
-        show_parameters('MAMA', code, save, filename)
+        txns = backtest(setup, stocks)
+
+        if len(txns) != 0:
+            stats = calculate_win_rate(code != 'ALL' and code or 'ALL', txns)
+
+            txnsdf = pd.DataFrame(txns)
+            statsdf = pd.DataFrame(all_stats)
+
+            txnsdf['pnl'] = txnsdf['pnl'].astype(str) + '%'
+            txnsdf.style.format({'pnl': "{0:+g}"})
+
+            statsdf['win_rate'] = statsdf['win_rate'].astype(str) + '%'
+            statsdf['max_win'] = statsdf['max_win'].astype(str) + '%'
+            statsdf['max_loss'] = statsdf['max_loss'].astype(str) + '%'
+            statsdf['total'] = statsdf['total'].astype(str) + '%'
+
+            if save:
+                with pd.ExcelWriter('results/{0}.xlsx'.format(filename)) as writer:  # pylint: disable=abstract-class-instantiated
+                    statsdf.to_excel(writer, sheet_name='Summary')
+                    txnsdf.to_excel(writer, sheet_name='Details')
+
+            pd.set_option('display.max_rows', 1000)
+
+            print(txnsdf)
+            display_stats('DOUBLE CROSS', stats)
+            print(statsdf)
+
+            show_parameters('MAMA', code, save, filename)
+    else:
+        info_logger('Enter stock to test')
 
 
 def backtest(setup, stocks):
