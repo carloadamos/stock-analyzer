@@ -3,9 +3,9 @@ import sys
 from stock_list import codes
 from datetime import datetime
 import json
-import logging
 import pymongo
 import pandas as pd
+from logger import error_logger, info_logger, warning_logger
 
 # database Connection
 # connection_url = 'mongodb+srv://admin:admin@cluster0.70gug.mongodb.net/exercise-tracker?retryWrites=true&w=majority'
@@ -13,10 +13,6 @@ connection_url = 'mongodb://localhost:27017/'
 client = pymongo.MongoClient(connection_url)
 database = client.get_database('stock-analyzer')
 stocks_table = database.stocks
-
-# Logger
-logging.basicConfig(filename='executions.log', level=logging.DEBUG,
-                    format='%(asctime)s %(message)s', datefmt='%m/%d/%Y %I:%M:%S %p')
 
 # Constants
 COMM_RATE = 1.19
@@ -73,8 +69,7 @@ def calculate_win_rate(code, txns):
                 winning_trade += 1
         except:
             has_open_position = True
-            logging.info('Open position')
-            print('Open position')
+            info_logger('Open position')
 
     valid_txns = has_open_position and (
         valid_txns - 1) or valid_txns
@@ -130,72 +125,31 @@ def display_stats(strategy, stats):
               stats['total']))
 
 
-def double_cross(setup):
+def double_cross(setup, stocks):
     txns = []
     buy = []
     sell = []
     risk = []
 
     if setup['buy'] is None or setup['sell'] is None:
-        logging.error('Error in configuration file')
-        print('Error in configuration file')
+        error_logger('Error in configuration file')
     else:
         buy = setup['buy']
         sell = setup['sell']
         risk = setup['risk']
 
-    code = input('Enter stock to test: ')
-    save = save_file()
-    name = ''
+    for stock_code in stocks:
+        info_logger('Starting test of {}'.format(stock_code))
 
-    if save:
-        name = file_name()
+        txn = double_cross_backtest(stock_code, buy, sell, risk)
+        get_stats(stock_code, txn)
+        txns = txns + txn
 
-    if code != '':
-        code = code.upper()
-        stocks = code == 'ALL' and codes or [code]
-        logging.info('Starting DOUBLE CROSS test')
-        print('Starting DOUBLE CROSS test\n')
+        info_logger('End of test of {}'.format(stock_code))
 
-        for stock_code in stocks:
-            logging.info('Starting test of {}'.format(stock_code))
-            print('Starting test of {}'.format(stock_code))
+    info_logger('End of DOUBLE CROSS test')
 
-            txn = double_cross_backtest(stock_code, buy, sell, risk)
-            get_stats(stock_code, txn)
-            txns = txns + txn
-
-            logging.info('End of test of {}'.format(stock_code))
-            print('End of test of {}'.format(stock_code))
-
-        logging.info('End of DOUBLE CROSS test')
-        print('\nEnd of DOUBLE CROSS test')
-
-    if len(txns) != 0:
-        stats = calculate_win_rate(code != 'ALL' and code or 'ALL', txns)
-
-        txnsdf = pd.DataFrame(txns)
-        statsdf = pd.DataFrame(all_stats)
-
-        txnsdf['pnl'] = txnsdf['pnl'].astype(str) + '%'
-        txnsdf.style.format({'pnl': "{0:+g}"})
-
-        statsdf['win_rate'] = statsdf['win_rate'].astype(str) + '%'
-        statsdf['max_win'] = statsdf['max_win'].astype(str) + '%'
-        statsdf['max_loss'] = statsdf['max_loss'].astype(str) + '%'
-        statsdf['total'] = statsdf['total'].astype(str) + '%'
-
-        if save:
-            with pd.ExcelWriter('{0}.xlsx'.format(name)) as writer:  # pylint: disable=abstract-class-instantiated
-                statsdf.to_excel(writer, sheet_name='Summary')
-                txnsdf.to_excel(writer, sheet_name='Details')
-
-        pd.set_option('display.max_rows', 1000)
-
-        print(txnsdf)
-        display_stats('DOUBLE CROSS', stats)
-        print(statsdf)
-        show_parameters('DOUBLE CROSS', code, save, name)
+    return txns
 
 
 def double_cross_backtest(code, buy_conditions, sell_conditions, risk_conditions):
@@ -285,7 +239,7 @@ def fetch_stocks(code):
     return list(stocks_table.find({"code": code}))
 
 
-def file_name():
+def get_filename():
     return input('Enter filename: ')
 
 
@@ -324,27 +278,69 @@ def low_below_alma(stock):
 
 
 def main():
+    config_filename = ''
+    txns = []
+    filename = ''
+    setup = ''
+    stocks = []
+
     strat = input(
         'Which strategy would you like to test?\n[1 - MAMA]\n[2 - DOUBLE CROSS]: ')
 
-    setup = ''
+    code = input('Enter stock to test: ')
+
+    if code != '':
+        code = code.upper()
+        stocks = code == 'ALL' and codes or [code]
+        info_logger('Starting DOUBLE CROSS test')
+
+    save = save_file()
+
+    if save:
+        filename = get_filename()
+
     if strat == '1':
-        with open('mama.config.json') as file:
-            setup = json.loads(file.read())
-
-        mama(setup)
+        config_filename = 'mama.config.json'
     elif strat == '2':
-        with open('double_cross.config.json') as file:
-            setup = json.loads(file.read())
-
-        double_cross(setup)
+        config_filename = 'double_cross.config.json'
     else:
-        print('No other strategy yet')
+        print('No strategy like that yet')
+
+    with open('{}'.format(config_filename)) as file:
+        setup = json.loads(file.read())
+
+    txns = backtest(setup, stocks)
+
+    if len(txns) != 0:
+        stats = calculate_win_rate(code != 'ALL' and code or 'ALL', txns)
+
+        txnsdf = pd.DataFrame(txns)
+        statsdf = pd.DataFrame(all_stats)
+
+        txnsdf['pnl'] = txnsdf['pnl'].astype(str) + '%'
+        txnsdf.style.format({'pnl': "{0:+g}"})
+
+        statsdf['win_rate'] = statsdf['win_rate'].astype(str) + '%'
+        statsdf['max_win'] = statsdf['max_win'].astype(str) + '%'
+        statsdf['max_loss'] = statsdf['max_loss'].astype(str) + '%'
+        statsdf['total'] = statsdf['total'].astype(str) + '%'
+
+        if save:
+            with pd.ExcelWriter('{0}.xlsx'.format(filename)) as writer:  # pylint: disable=abstract-class-instantiated
+                statsdf.to_excel(writer, sheet_name='Summary')
+                txnsdf.to_excel(writer, sheet_name='Details')
+
+        pd.set_option('display.max_rows', 1000)
+
+        print(txnsdf)
+        display_stats('DOUBLE CROSS', stats)
+        print(statsdf)
+
+        show_parameters('MAMA', code, save, filename)
 
 
-def mama(setup):
+def backtest(setup, stocks):
     buy = []
-    name = ''
     risk = []
     sell = []
     txns = []
@@ -354,60 +350,18 @@ def mama(setup):
         sell = setup['sell']
         risk = setup['risk'] is not None and setup['risk'] or []
     except:
-        logging.error('Error in configuration file')
-        print('Error in configuration file')
+        error_logger('Error in configuration file')
 
-    # User input
-    code = stock_to_test()
-    save = save_file()
+    for stock_code in stocks:
+        info_logger('Starting test of {}'.format(stock_code))
 
-    if save:
-        name = file_name()
+        txn = perform_backtest(stock_code, buy, sell, risk)
+        get_stats(stock_code, txn)
+        txns = txns + txn
 
-    if code != '':
-        stocks = code == 'ALL' and codes or [code]
+        info_logger('End of test of {}'.format(stock_code))
 
-        logging.info('Starting MAMA test')
-        print('Starting MAMA test\n')
-
-        for stock_code in stocks:
-            logging.info('Starting test of {}'.format(stock_code))
-            print('Starting test of {}'.format(stock_code))
-
-            txn = mama_backtest(stock_code, buy, sell, risk)
-            get_stats(stock_code, txn)
-            txns = txns + txn
-
-            logging.info('End of test of {}'.format(stock_code))
-            print('End of test of {}'.format(stock_code))
-
-        logging.info('End of MAMA test')
-        print('\nEnd of MAMA test')
-
-    if len(txns) != 0:
-        stats = calculate_win_rate(code != 'ALL' and code or 'ALL', txns)
-
-        txnsdf = pd.DataFrame(txns)
-        statsdf = pd.DataFrame(all_stats)
-
-        txnsdf['pnl'] = txnsdf['pnl'].astype(str) + '%'
-
-        statsdf['win_rate'] = statsdf['win_rate'].astype(str) + '%'
-        statsdf['max_win'] = statsdf['max_win'].astype(str) + '%'
-        statsdf['max_loss'] = statsdf['max_loss'].astype(str) + '%'
-        statsdf['total'] = statsdf['total'].astype(str) + '%'
-
-        if save:
-            with pd.ExcelWriter('{0}.xlsx'.format(name)) as writer:  # pylint: disable=abstract-class-instantiated
-                statsdf.to_excel(writer, sheet_name='Summary')
-                txnsdf.to_excel(writer, sheet_name='Details')
-
-        pd.set_option('display.max_rows', 1000)
-
-        print(txnsdf)
-        display_stats('MAMA', stats)
-        print(statsdf)
-        show_parameters('MAMA', code, save, name)
+    return txns
 
 
 def valid_previous_values(prev_values, target_prev_value):
@@ -423,7 +377,7 @@ def valid_previous_values(prev_values, target_prev_value):
     return valid
 
 
-def mama_backtest(code, buy_conditions, sell_conditions, risk_conditions):
+def perform_backtest(code, buy_conditions, sell_conditions, risk_conditions):
     stocks = fetch_stocks(code)
     buy = True
     i = 0
