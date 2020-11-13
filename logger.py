@@ -1,7 +1,10 @@
 import logging
+import os
+
+os.remove('logs/executions.log')
 
 # Logger
-logging.basicConfig(filename='executions.log', level=logging.DEBUG,
+logging.basicConfig(filename='logs/executions.log', level=logging.DEBUG,
                     format='%(asctime)s %(message)s', datefmt='%m/%d/%Y %I:%M:%S %p')
 
 

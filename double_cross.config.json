@@ -8,5 +8,6 @@
     "is_above(prev_ma20, prev_alma)",
     "is_above(volume, volume20)"
   ],
-  "sell": ["is_below(close, alma)"]
+  "sell": ["is_below(close, alma)"],
+  "risk": []
 }

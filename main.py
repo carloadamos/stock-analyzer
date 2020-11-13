@@ -226,7 +226,7 @@ def main():
         statsdf['total'] = statsdf['total'].astype(str) + '%'
 
         if save:
-            with pd.ExcelWriter('{0}.xlsx'.format(filename)) as writer:  # pylint: disable=abstract-class-instantiated
+            with pd.ExcelWriter('results/{0}.xlsx'.format(filename)) as writer:  # pylint: disable=abstract-class-instantiated
                 statsdf.to_excel(writer, sheet_name='Summary')
                 txnsdf.to_excel(writer, sheet_name='Details')
 
