@@ -1,0 +1,12 @@
+{
+  "buy": [
+    "is_above(macd, macds)",
+    "is_above(value, target_value)",
+    "is_above(close, alma)",
+    "is_above(close, ma20)",
+    "is_above(alma, ma20)",
+    "is_above(prev_ma20, prev_alma)",
+    "is_above(volume, volume20)"
+  ],
+  "sell": ["is_below(close, alma)"]
+}

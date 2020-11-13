@@ -20,7 +20,6 @@ logging.basicConfig(filename='executions.log', level=logging.DEBUG,
 
 # Constants
 COMM_RATE = 1.19
-RISK = 4
 TARGET_VALUE = 1000000
 TARGET_PREVIOUS_VALUE = 800000
 START_DATE = 1451595600
@@ -29,7 +28,7 @@ START_DATE = 1451595600
 all_stats = []
 
 
-def calculate_risk(stocks, cur_pos):
+def first_breakout(stocks, cur_pos):
     i = 0
     entry_point = stocks[cur_pos]['close']
     risk = compute_profit(entry_point, stocks[cur_pos]['alma'])
@@ -97,15 +96,6 @@ def candle_above_indicator(stock, indicator):
     return is_green_candle(stock) and stock['open'] > indicator
 
 
-def check_risk():
-    check_risk = input(
-        'Include risk checking? Current value is: {0} [Y/N] '.format(RISK))
-    check_risk = check_risk.upper()
-    check_risk = check_risk == 'Y' and True or False
-
-    return check_risk
-
-
 def close_below_alma(stock):
     """
     Identify if close price is below ALMA.
@@ -140,11 +130,21 @@ def display_stats(strategy, stats):
               stats['total']))
 
 
-def double_cross():
-    all_txns = []
+def double_cross(setup):
+    txns = []
+    buy = []
+    sell = []
+    risk = []
+
+    if setup['buy'] is None or setup['sell'] is None:
+        logging.error('Error in configuration file')
+        print('Error in configuration file')
+    else:
+        buy = setup['buy']
+        sell = setup['sell']
+        risk = setup['risk']
 
     code = input('Enter stock to test: ')
-    include_risk = check_risk()
     save = save_file()
     name = ''
 
@@ -154,15 +154,29 @@ def double_cross():
     if code != '':
         code = code.upper()
         stocks = code == 'ALL' and codes or [code]
-        all_txns = double_cross_process_backtest(stocks, include_risk)
+        logging.info('Starting DOUBLE CROSS test')
+        print('Starting DOUBLE CROSS test\n')
 
-    if len(all_txns) != 0:
-        stats = calculate_win_rate(code != 'ALL' and code or 'ALL', all_txns)
+        for stock_code in stocks:
+            logging.info('Starting test of {}'.format(stock_code))
+            print('Starting test of {}'.format(stock_code))
 
-        txnsdf = pd.DataFrame(all_txns)
+            txn = double_cross_backtest(stock_code, buy, sell, risk)
+            get_stats(stock_code, txn)
+            txns = txns + txn
+
+            logging.info('End of test of {}'.format(stock_code))
+            print('End of test of {}'.format(stock_code))
+
+        logging.info('End of DOUBLE CROSS test')
+        print('\nEnd of DOUBLE CROSS test')
+
+    if len(txns) != 0:
+        stats = calculate_win_rate(code != 'ALL' and code or 'ALL', txns)
+
+        txnsdf = pd.DataFrame(txns)
         statsdf = pd.DataFrame(all_stats)
 
-        txnsdf['risk'] = txnsdf['risk'].astype(str) + '%'
         txnsdf['pnl'] = txnsdf['pnl'].astype(str) + '%'
         txnsdf.style.format({'pnl': "{0:+g}"})
 
@@ -181,15 +195,14 @@ def double_cross():
         print(txnsdf)
         display_stats('DOUBLE CROSS', stats)
         print(statsdf)
-        show_parameters('MAMA', code, include_risk, save, name)
+        show_parameters('DOUBLE CROSS', code, save, name)
 
 
-def double_cross_backtest(code, check_risk):
+def double_cross_backtest(code, buy_conditions, sell_conditions, risk_conditions):
     stocks = fetch_stocks(code)
     buy = True
     i = 0
 
-    prev_alma_above_ma = False
     txns = []
     # Loop
     for stock in stocks:
@@ -201,57 +214,59 @@ def double_cross_backtest(code, check_risk):
                 and stock['volume20'] is not None):
 
             if stock['timestamp'] >= START_DATE:
+
+                # Variables for eval
+                # pylint: disable=unused-variable
+                alma = stock['alma']
+                close = stock['close']
+                macd = stock['macd']
+                macds = stock['macds']
+                ma20 = stock['ma20']
+                prev_alma = stocks[i-1]['alma']
+                prev_close = stocks[i-1]['close']
+                prev_ma20 = stocks[i-1]['ma20']
+                prev_values = get_previous_values(stocks, i, 5)
+                target_prev_values = TARGET_PREVIOUS_VALUE
+                target_value = TARGET_VALUE
+                value = stock['value']
+                volume = stock['volume']
+                volume20 = stock['volume20']
+
+                # BUYING STOCK
                 if buy:
-                    if not prev_alma_above_ma and is_above(stock['macd'], stock['macds']):
-                        if (candle_above_indicator(stock, stock['alma'])
-                                and candle_above_indicator(stock, stock['ma20'])
-                                and is_above(stock['alma'], stock['ma20'])):
-                            risk = round(calculate_risk(stocks, i), 2)
-                            if check_risk:
-                                if risk >= -RISK:
-                                    txn = trade(stock, action)
-                                    txn['risk'] = risk
-                                    txns.append(txn)
-                                    buy = not buy
-                            else:
+                    valid = False
+                    for condition in buy_conditions:
+                        valid = True
+                        valid = eval(condition)
+                        if not valid:
+                            break
+
+                    if valid:
+                        for condition in risk_conditions:
+                            valid = eval(condition)
+                            if not valid:
+                                break
+
+                            if valid:
                                 txn = trade(stock, action)
                                 txns.append(txn)
-                                txn['risk'] = risk
                                 buy = not buy
                 else:
-                    if close_below_alma(stock) and close_below_alma(stocks[i-1]):
+                    valid = False
+                    for condition in sell_conditions:
+                        valid = True
+                        valid = eval(condition)
+                        if not valid:
+                            break
+
+                    if valid:
                         txn = trade(stock, action)
                         txns[len(txns)-1]['sell_date'] = txn['sell_date']
                         txns[len(txns)-1]['sell_price'] = txn['sell_price']
                         txns[len(txns)-1]['pnl'] = compute_pnl(txn, txns)
                         buy = not buy
 
-        if stock['alma'] is not None and stock['ma20'] is not None:
-            prev_alma_above_ma = is_above(stock['alma'], stock['ma20'])
-
         i += 1
-
-    return txns
-
-
-def double_cross_process_backtest(codes_to_test, include_risk):
-    logging.info('Starting DOUBLE CROSS test')
-    print('Starting DOUBLE CROSS test\n')
-
-    txns = []
-    for code in codes_to_test:
-        logging.info('Starting test of {}'.format(code))
-        print('Starting test of {}'.format(code))
-
-        txn = double_cross_backtest(code, check_risk)
-        get_stats(code, txn)
-        txns = txns + txn
-
-        logging.info('End of test of {}'.format(code))
-        print('End of test of {}'.format(code))
-
-    logging.info('End of DOUBLE CROSS test')
-    print('\nEnd of DOUBLE CROSS test')
 
     return txns
 
@@ -319,27 +334,31 @@ def main():
 
         mama(setup)
     elif strat == '2':
-        double_cross()
+        with open('double_cross.config.json') as file:
+            setup = json.loads(file.read())
+
+        double_cross(setup)
     else:
         print('No other strategy yet')
 
 
 def mama(setup):
-    txns = []
-    name = ''
     buy = []
+    name = ''
+    risk = []
     sell = []
+    txns = []
 
-    if setup['buy'] is None or setup['sell'] is None:
-        logging.error('Error in configuration file')
-        print('Error in configuration file')
-    else:
+    try:
         buy = setup['buy']
         sell = setup['sell']
+        risk = setup['risk'] is not None and setup['risk'] or []
+    except:
+        logging.error('Error in configuration file')
+        print('Error in configuration file')
 
     # User input
     code = stock_to_test()
-    include_risk = check_risk()
     save = save_file()
 
     if save:
@@ -355,7 +374,7 @@ def mama(setup):
             logging.info('Starting test of {}'.format(stock_code))
             print('Starting test of {}'.format(stock_code))
 
-            txn = mama_backtest(stock_code, buy, sell, include_risk)
+            txn = mama_backtest(stock_code, buy, sell, risk)
             get_stats(stock_code, txn)
             txns = txns + txn
 
@@ -371,7 +390,6 @@ def mama(setup):
         txnsdf = pd.DataFrame(txns)
         statsdf = pd.DataFrame(all_stats)
 
-        txnsdf['risk'] = txnsdf['risk'].astype(str) + '%'
         txnsdf['pnl'] = txnsdf['pnl'].astype(str) + '%'
 
         statsdf['win_rate'] = statsdf['win_rate'].astype(str) + '%'
@@ -389,11 +407,7 @@ def mama(setup):
         print(txnsdf)
         display_stats('MAMA', stats)
         print(statsdf)
-        show_parameters('MAMA', code, include_risk, save, name)
-
-
-def is_valid_risk(risk):
-    return risk >= -RISK
+        show_parameters('MAMA', code, save, name)
 
 
 def valid_previous_values(prev_values, target_prev_value):
@@ -409,7 +423,7 @@ def valid_previous_values(prev_values, target_prev_value):
     return valid
 
 
-def mama_backtest(code, buy_conditions, sell_conditions, include_risk=True):
+def mama_backtest(code, buy_conditions, sell_conditions, risk_conditions):
     stocks = fetch_stocks(code)
     buy = True
     i = 0
@@ -436,7 +450,6 @@ def mama_backtest(code, buy_conditions, sell_conditions, include_risk=True):
                 prev_alma = stocks[i-1]['alma']
                 prev_close = stocks[i-1]['close']
                 prev_values = get_previous_values(stocks, i, 5)
-                risk = round(calculate_risk(stocks, i), 2)
                 target_prev_values = TARGET_PREVIOUS_VALUE
                 target_value = TARGET_VALUE
                 value = stock['value']
@@ -453,15 +466,16 @@ def mama_backtest(code, buy_conditions, sell_conditions, include_risk=True):
                             if not valid:
                                 break
 
-                    if valid and include_risk:
-                        if not is_valid_risk(risk):
-                            valid = False
-
                     if valid:
-                        txn = trade(stock, action)
-                        txn['risk'] = risk
-                        txns.append(txn)
-                        buy = not buy
+                        for condition in risk_conditions:
+                            valid = eval(condition)
+                            if not valid:
+                                break
+
+                        if valid:
+                            txn = trade(stock, action)
+                            txns.append(txn)
+                            buy = not buy
                 else:
                     valid = False
                     for condition in sell_conditions:
@@ -493,10 +507,10 @@ def save_file():
     return save == 'Y' and True or False
 
 
-def show_parameters(strategy, stock, risk, save_file, filename=''):
-    print('\nPARAMETERS USED IN THIS TEST \nStrategy: {0} \nStock: {1} \nRisk: {2} \nSave File: {3} \nFilename: {4}'
+def show_parameters(strategy, stock, save_file, filename=''):
+    print('\nPARAMETERS USED IN THIS TEST \nStrategy: {0} \nStock: {1} \nSave File: {2} \nFilename: {3}'
           .format(
-              strategy, stock, risk, save_file, filename
+              strategy, stock, save_file, filename
           ))
 
 

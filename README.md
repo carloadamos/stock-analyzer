@@ -15,4 +15,5 @@ TODO:
 2. Run all test -- DONE
 3. indicate to check risk or not -- DONE
 4. Fix stoploss -- DONE
-5. My own strategy - ALMA, MA20 and MACD
+5. My own strategy - ALMA, MA20 and MACD -- DONE
+6. Test one stock with both strategy
