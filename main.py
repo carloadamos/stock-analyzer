@@ -295,6 +295,10 @@ def is_above(above, below):
     return above > below
 
 
+def is_below(below, above):
+    return below < above
+
+
 def is_green_candle(stock):
     return stock['close'] > stock['open']
 
@@ -347,16 +351,16 @@ def mama(setup):
         logging.info('Starting MAMA test')
         print('Starting MAMA test\n')
 
-        for code in stocks:
-            logging.info('Starting test of {}'.format(code))
-            print('Starting test of {}'.format(code))
+        for stock_code in stocks:
+            logging.info('Starting test of {}'.format(stock_code))
+            print('Starting test of {}'.format(stock_code))
 
-            txn = mama_backtest(code, buy, sell, include_risk)
-            get_stats(code, txn)
+            txn = mama_backtest(stock_code, buy, sell, include_risk)
+            get_stats(stock_code, txn)
             txns = txns + txn
 
-            logging.info('End of test of {}'.format(code))
-            print('End of test of {}'.format(code))
+            logging.info('End of test of {}'.format(stock_code))
+            print('End of test of {}'.format(stock_code))
 
         logging.info('End of MAMA test')
         print('\nEnd of MAMA test')
@@ -424,10 +428,13 @@ def mama_backtest(code, buy_conditions, sell_conditions, include_risk=True):
             if stock['timestamp'] >= START_DATE:
 
                 # Variables for eval
+                # pylint: disable=unused-variable
                 alma = stock['alma']
                 close = stock['close']
                 macd = stock['macd']
                 macds = stock['macds']
+                prev_alma = stocks[i-1]['alma']
+                prev_close = stocks[i-1]['close']
                 prev_values = get_previous_values(stocks, i, 5)
                 risk = round(calculate_risk(stocks, i), 2)
                 target_prev_values = TARGET_PREVIOUS_VALUE
@@ -451,42 +458,19 @@ def mama_backtest(code, buy_conditions, sell_conditions, include_risk=True):
                             valid = False
 
                     if valid:
-                        print('Valid buy')
                         txn = trade(stock, action)
                         txn['risk'] = risk
-                        print(txn)
                         txns.append(txn)
                         buy = not buy
-                        # if not prev_macd_above_signal and is_above(stock['macd'], stock['macds']):
-                        #     if (is_above(stock['value'], TARGET_VALUE)):
-                        #         prev_values = get_previous_values(stocks, i, 5)
-                        #         valid = True
-                        #         invalid_ctr = 0
-
-                        #         for value in prev_values:
-                        #             if not is_above(value, TARGET_PREVIOUS_VALUE):
-                        #                 invalid_ctr += 1
-                        #             if invalid_ctr > 1:
-                        #                 valid = False
-                        #         if valid:
-                        #             if is_above(stock['close'], stock['alma']):
-                        #                 if is_above(stock['volume'], stock['volume20']):
-                        #                     risk = round(
-                        #                         calculate_risk(stocks, i), 2)
-                        #                     if check_risk:
-                        #                         if risk >= -RISK:
-                        #                             txn = trade(stock, action)
-                        #                             txn['risk'] = risk
-                        #                             txns.append(txn)
-                        #                             buy = not buy
-                        #                     else:
-                        #                         txn = trade(stock, action)
-                        #                         txns.append(txn)
-                        #                         txn['risk'] = risk
-                        #                         buy = not buy
-                        # SELLING STOCK
                 else:
-                    if close_below_alma(stock) and close_below_alma(stocks[i-1]):
+                    valid = False
+                    for condition in sell_conditions:
+                        valid = True
+                        valid = eval(condition)
+                        if not valid:
+                            break
+
+                    if valid:
                         txn = trade(stock, action)
                         txns[len(txns)-1]['sell_date'] = txn['sell_date']
                         txns[len(txns)-1]['sell_price'] = txn['sell_price']
