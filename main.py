@@ -53,14 +53,22 @@ def calculate_win_rate(code, txns):
             "total": 0
         }
 
+    df = pd.DataFrame(txns)
+    has_open_position = False
+    total = 0
+    valid_txns = len(txns)
     win_rate = 0
     winning_trade = 0
-    total = 0
-    df = pd.DataFrame(txns)
-    max_loss = df['pnl'].min() < 0 and df['pnl'].min() or 0
-    max_win = df['pnl'].max() > 0 and df['pnl'].max() or 0
-    has_open_position = False
-    valid_txns = len(txns)
+
+    # For scenario where:
+    # there is only one transaction and
+    # it is still open
+    try:
+        max_loss = df['pnl'].min() < 0 and df['pnl'].min() or 0
+        max_win = df['pnl'].max() > 0 and df['pnl'].max() or 0
+    except:
+        max_loss = 0
+        max_win = 0
 
     for txn in txns:
         try:
@@ -182,6 +190,7 @@ def main():
     txns = []
     filename = ''
     setup = ''
+    strat_name = ''
     stocks = []
 
     strat = input(
@@ -192,7 +201,6 @@ def main():
     if code != '':
         code = code.upper()
         stocks = code == 'ALL' and codes or [code]
-        info_logger('Starting DOUBLE CROSS test')
 
         save = save_file()
 
@@ -200,8 +208,10 @@ def main():
             filename = get_filename()
 
         if strat == '1':
+            strat_name = 'MAMA'
             config_filename = 'mama.config.json'
         elif strat == '2':
+            strat_name = 'DOUBLE CROSS'
             config_filename = 'double_cross.config.json'
         else:
             print('No strategy like that yet')
@@ -209,36 +219,42 @@ def main():
         with open('{}'.format(config_filename)) as file:
             setup = json.loads(file.read())
 
+        info_logger('Starting {} test'.format(strat_name))
         txns = backtest(setup, stocks)
+        info_logger('End {} test'.format(strat_name))
 
-        if len(txns) != 0:
-            stats = calculate_win_rate(code != 'ALL' and code or 'ALL', txns)
-
-            txnsdf = pd.DataFrame(txns)
-            statsdf = pd.DataFrame(all_stats)
-
-            txnsdf['pnl'] = txnsdf['pnl'].astype(str) + '%'
-            txnsdf.style.format({'pnl': "{0:+g}"})
-
-            statsdf['win_rate'] = statsdf['win_rate'].astype(str) + '%'
-            statsdf['max_win'] = statsdf['max_win'].astype(str) + '%'
-            statsdf['max_loss'] = statsdf['max_loss'].astype(str) + '%'
-            statsdf['total'] = statsdf['total'].astype(str) + '%'
-
-            if save:
-                with pd.ExcelWriter('results/{0}.xlsx'.format(filename)) as writer:  # pylint: disable=abstract-class-instantiated
-                    statsdf.to_excel(writer, sheet_name='Summary')
-                    txnsdf.to_excel(writer, sheet_name='Details')
-
-            pd.set_option('display.max_rows', 1000)
-
-            print(txnsdf)
-            display_stats('DOUBLE CROSS', stats)
-            print(statsdf)
-
-            show_parameters('MAMA', code, save, filename)
+        display_report(strat_name, code, txns, save, filename)
+        show_parameters('{}'.format(strat_name), code, save, filename)
     else:
         info_logger('Enter stock to test')
+
+
+def display_report(name, code, txns, save, filename):
+    if len(txns) != 0:
+        stats = calculate_win_rate(code != 'ALL' and code or 'ALL', txns)
+
+        pd.set_option('display.max_rows', 1000)
+        txnsdf = pd.DataFrame(txns)
+        statsdf = pd.DataFrame(all_stats)
+        txnsdf['pnl'] = txnsdf['pnl'].astype(str) + '%'
+        txnsdf.style.format({'pnl': "{0:+g}"})
+        statsdf['win_rate'] = statsdf['win_rate'].astype(str) + '%'
+        statsdf['max_win'] = statsdf['max_win'].astype(str) + '%'
+        statsdf['max_loss'] = statsdf['max_loss'].astype(str) + '%'
+        statsdf['total'] = statsdf['total'].astype(str) + '%'
+
+        if save:
+            save_report(filename, txnsdf, statsdf)
+
+        info_logger(txnsdf)
+        display_stats('{}'.format(name), stats)
+        info_logger(statsdf)
+
+
+def save_report(filename, txns, stats):
+    with pd.ExcelWriter('results/{0}.xlsx'.format(filename)) as writer:  # pylint: disable=abstract-class-instantiated
+        stats.to_excel(writer, sheet_name='Summary')
+        txns.to_excel(writer, sheet_name='Details')
 
 
 def backtest(setup, stocks):
