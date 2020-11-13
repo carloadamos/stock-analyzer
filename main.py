@@ -125,106 +125,6 @@ def display_stats(strategy, stats):
               stats['total']))
 
 
-def double_cross(setup, stocks):
-    txns = []
-    buy = []
-    sell = []
-    risk = []
-
-    if setup['buy'] is None or setup['sell'] is None:
-        error_logger('Error in configuration file')
-    else:
-        buy = setup['buy']
-        sell = setup['sell']
-        risk = setup['risk']
-
-    for stock_code in stocks:
-        info_logger('Starting test of {}'.format(stock_code))
-
-        txn = double_cross_backtest(stock_code, buy, sell, risk)
-        get_stats(stock_code, txn)
-        txns = txns + txn
-
-        info_logger('End of test of {}'.format(stock_code))
-
-    info_logger('End of DOUBLE CROSS test')
-
-    return txns
-
-
-def double_cross_backtest(code, buy_conditions, sell_conditions, risk_conditions):
-    stocks = fetch_stocks(code)
-    buy = True
-    i = 0
-
-    txns = []
-    # Loop
-    for stock in stocks:
-        action = buy and 'BUY' or 'SELL'
-
-        if (stock['alma'] is not None
-            and stock['macd'] is not None
-            and stock['ma20'] is not None
-                and stock['volume20'] is not None):
-
-            if stock['timestamp'] >= START_DATE:
-
-                # Variables for eval
-                # pylint: disable=unused-variable
-                alma = stock['alma']
-                close = stock['close']
-                macd = stock['macd']
-                macds = stock['macds']
-                ma20 = stock['ma20']
-                prev_alma = stocks[i-1]['alma']
-                prev_close = stocks[i-1]['close']
-                prev_ma20 = stocks[i-1]['ma20']
-                prev_values = get_previous_values(stocks, i, 5)
-                target_prev_values = TARGET_PREVIOUS_VALUE
-                target_value = TARGET_VALUE
-                value = stock['value']
-                volume = stock['volume']
-                volume20 = stock['volume20']
-
-                # BUYING STOCK
-                if buy:
-                    valid = False
-                    for condition in buy_conditions:
-                        valid = True
-                        valid = eval(condition)
-                        if not valid:
-                            break
-
-                    if valid:
-                        for condition in risk_conditions:
-                            valid = eval(condition)
-                            if not valid:
-                                break
-
-                            if valid:
-                                txn = trade(stock, action)
-                                txns.append(txn)
-                                buy = not buy
-                else:
-                    valid = False
-                    for condition in sell_conditions:
-                        valid = True
-                        valid = eval(condition)
-                        if not valid:
-                            break
-
-                    if valid:
-                        txn = trade(stock, action)
-                        txns[len(txns)-1]['sell_date'] = txn['sell_date']
-                        txns[len(txns)-1]['sell_price'] = txn['sell_price']
-                        txns[len(txns)-1]['pnl'] = compute_pnl(txn, txns)
-                        buy = not buy
-
-        i += 1
-
-    return txns
-
-
 def fetch_all_stocks():
     """
     Fetch all stocks.
@@ -399,10 +299,12 @@ def perform_backtest(code, buy_conditions, sell_conditions, risk_conditions):
                 # pylint: disable=unused-variable
                 alma = stock['alma']
                 close = stock['close']
+                ma20 = stock['ma20']
                 macd = stock['macd']
                 macds = stock['macds']
                 prev_alma = stocks[i-1]['alma']
                 prev_close = stocks[i-1]['close']
+                prev_ma20 = stocks[i-1]['ma20']
                 prev_values = get_previous_values(stocks, i, 5)
                 target_prev_values = TARGET_PREVIOUS_VALUE
                 target_value = TARGET_VALUE
