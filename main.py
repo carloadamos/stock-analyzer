@@ -309,7 +309,6 @@ def perform_backtest(code, buy_conditions, sell_conditions, risk_conditions):
     buy = True
     i = 0
 
-    prev_macd_above_signal = False
     txns = []
     # Loop
     for stock in stocks:
@@ -324,14 +323,17 @@ def perform_backtest(code, buy_conditions, sell_conditions, risk_conditions):
 
                 # Variables for eval
                 # pylint: disable=unused-variable
+                prev_stock = stocks[i-1]
                 alma = stock['alma']
                 close = stock['close']
                 ma20 = stock['ma20']
                 macd = stock['macd']
                 macds = stock['macds']
-                prev_alma = stocks[i-1]['alma']
-                prev_close = stocks[i-1]['close']
-                prev_ma20 = stocks[i-1]['ma20']
+                prev_alma = prev_stock['alma']
+                prev_close = prev_stock['close']
+                prev_macd = prev_stock['macd']
+                prev_macds = prev_stock['macds']
+                prev_ma20 = prev_stock['ma20']
                 prev_values = get_previous_values(stocks, i, 5)
                 target_prev_values = TARGET_PREVIOUS_VALUE
                 target_value = TARGET_VALUE
@@ -343,11 +345,10 @@ def perform_backtest(code, buy_conditions, sell_conditions, risk_conditions):
                 if buy:
                     valid = False
                     for condition in buy_conditions:
-                        if not prev_macd_above_signal:
-                            valid = True
-                            valid = eval(condition)
-                            if not valid:
-                                break
+                        valid = True
+                        valid = eval(condition)
+                        if not valid:
+                            break
 
                     if valid:
                         for condition in risk_conditions:
@@ -374,7 +375,6 @@ def perform_backtest(code, buy_conditions, sell_conditions, risk_conditions):
                         txns[len(txns)-1]['pnl'] = compute_pnl(txn, txns)
                         buy = not buy
 
-        prev_macd_above_signal = is_above(stock['macd'], stock['macds'])
         i += 1
 
     return txns

@@ -1,6 +1,7 @@
 {
   "buy": [
     "is_above(macd, macds)",
+    "is_below(prev_macd, prev_macds)",
     "is_above(value, target_value)",
     "valid_previous_values(prev_values, target_prev_values)",
     "is_above(close, alma)",
