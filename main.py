@@ -50,6 +50,7 @@ def calculate_win_rate(code, txns):
             "max_win": 0,
             "loss": 0,
             "max_loss": 0,
+            "total_trade": 0,
             "total": 0
         }
 
@@ -92,6 +93,7 @@ def calculate_win_rate(code, txns):
         "max_win": max_win,
         "loss": valid_txns - winning_trade,
         "max_loss": max_loss,
+        "total_trade": valid_txns,
         "total": round(total, 2)}
 
 
@@ -225,8 +227,10 @@ def main():
 
         info_logger('Starting {} test'.format(strat_name))
         txns = backtest(setup, stocks)
-        get_stats(code, txns)
         info_logger('End {} test'.format(strat_name))
+
+        if code == 'ALL':
+            get_stats(code, txns)
 
         display_report(strat_name, code, txns, save, filename)
         show_parameters('{}'.format(strat_name), code, save, filename)
@@ -237,18 +241,17 @@ def main():
 def display_report(name, code, txns, save, filename):
     if len(txns) != 0:
         stats = calculate_win_rate(code != 'ALL' and code or 'ALL', txns)
-
         txnsdf = pd.DataFrame(txns)
         txnsdf.sort_values(['code', 'buy_date'], ascending=True,
                            inplace=True, na_position='last')
-        statsdf = pd.DataFrame(all_stats)
         txnsdf['pnl'] = txnsdf['pnl'].astype(str) + '%'
-        txnsdf.style.format({'pnl': "{0:+g}"})
+        statsdf = pd.DataFrame(all_stats)
         statsdf['win_rate'] = statsdf['win_rate'].astype(str) + '%'
         statsdf['max_win'] = statsdf['max_win'].astype(str) + '%'
         statsdf['max_loss'] = statsdf['max_loss'].astype(str) + '%'
+        statsdf.sort_values(['total'], ascending=True,
+                            inplace=True, na_position='last')
         statsdf['total'] = statsdf['total'].astype(str) + '%'
-
         pd.set_option('display.max_rows', 10000)
 
         if save:
@@ -283,7 +286,8 @@ def backtest(setup, stocks):
             except:
                 error_logger('Error in configuration file')
 
-            txn = perform_backtest(stock_code, buy, sell, risk)
+            txn = process_backtest(stock_code, buy, sell, risk)
+            get_stats(stock_code, txn)
             txns = txns + txn
 
         info_logger('End of test of {}'.format(stock_code))
@@ -304,7 +308,7 @@ def valid_previous_values(prev_values, target_prev_value):
     return valid
 
 
-def perform_backtest(code, buy_conditions, sell_conditions, risk_conditions):
+def process_backtest(code, buy_conditions, sell_conditions, risk_conditions):
     stocks = fetch_stocks(code)
     buy = True
     i = 0
@@ -313,17 +317,17 @@ def perform_backtest(code, buy_conditions, sell_conditions, risk_conditions):
     # Loop
     for stock in stocks:
         action = buy and 'BUY' or 'SELL'
+        prev_stock = stocks[i-1]
 
-        if (stock['alma'] is not None
-            and stock['macd'] is not None
-            and stock['ma20'] is not None
-                and stock['volume20'] is not None):
+        if (prev_stock['alma'] is not None
+            and prev_stock['macd'] is not None
+            and prev_stock['ma20'] is not None
+                and prev_stock['volume20'] is not None):
 
             if stock['timestamp'] >= START_DATE:
 
                 # Variables for eval
                 # pylint: disable=unused-variable
-                prev_stock = stocks[i-1]
                 alma = stock['alma']
                 close = stock['close']
                 ma20 = stock['ma20']
@@ -358,6 +362,8 @@ def perform_backtest(code, buy_conditions, sell_conditions, risk_conditions):
 
                         if valid:
                             txn = trade(stock, action)
+                            txn['candle'] = is_green_candle(
+                                stock) and 'Green' or 'Red'
                             txns.append(txn)
                             buy = not buy
                 else:
