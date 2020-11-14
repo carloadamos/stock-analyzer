@@ -164,8 +164,8 @@ def get_previous_values(stocks, cur_pos, length):
     return prev_values
 
 
-def get_stats(code, txn):
-    all_stats.append(calculate_win_rate(code, txn))
+def get_stats(code, txns):
+    all_stats.append(calculate_win_rate(code, txns))
 
 
 def is_above(above, below):
@@ -186,10 +186,10 @@ def low_below_alma(stock):
 
 
 def main():
-    config_filename = ''
+    configs = ''
     txns = []
     filename = ''
-    setup = ''
+    setup = []
     strat_name = ''
     stocks = []
 
@@ -209,18 +209,23 @@ def main():
 
         if strat == '1':
             strat_name = 'MAMA'
-            config_filename = 'mama.config.json'
+            configs = ['mama.config.json']
         elif strat == '2':
             strat_name = 'DOUBLE CROSS'
-            config_filename = 'double_cross.config.json'
+            configs = ['double_cross.config.json']
+        elif strat.upper() == 'ALL':
+            strat_name = 'ALL'
+            configs = ['mama.config.json', 'double_cross.config.json']
         else:
             print('No strategy like that yet')
 
-        with open('{}'.format(config_filename)) as file:
-            setup = json.loads(file.read())
+        for config in configs:
+            with open('{}'.format(config)) as file:
+                setup.append(json.loads(file.read()))
 
         info_logger('Starting {} test'.format(strat_name))
         txns = backtest(setup, stocks)
+        get_stats(code, txns)
         info_logger('End {} test'.format(strat_name))
 
         display_report(strat_name, code, txns, save, filename)
@@ -233,8 +238,9 @@ def display_report(name, code, txns, save, filename):
     if len(txns) != 0:
         stats = calculate_win_rate(code != 'ALL' and code or 'ALL', txns)
 
-        pd.set_option('display.max_rows', 1000)
         txnsdf = pd.DataFrame(txns)
+        txnsdf.sort_values(['code', 'buy_date'], ascending=True,
+                           inplace=True, na_position='last')
         statsdf = pd.DataFrame(all_stats)
         txnsdf['pnl'] = txnsdf['pnl'].astype(str) + '%'
         txnsdf.style.format({'pnl': "{0:+g}"})
@@ -242,6 +248,8 @@ def display_report(name, code, txns, save, filename):
         statsdf['max_win'] = statsdf['max_win'].astype(str) + '%'
         statsdf['max_loss'] = statsdf['max_loss'].astype(str) + '%'
         statsdf['total'] = statsdf['total'].astype(str) + '%'
+
+        pd.set_option('display.max_rows', 10000)
 
         if save:
             save_report(filename, txnsdf, statsdf)
@@ -261,21 +269,22 @@ def backtest(setup, stocks):
     buy = []
     risk = []
     sell = []
+    txn = []
     txns = []
-
-    try:
-        buy = setup['buy']
-        sell = setup['sell']
-        risk = setup['risk'] is not None and setup['risk'] or []
-    except:
-        error_logger('Error in configuration file')
 
     for stock_code in stocks:
         info_logger('Starting test of {}'.format(stock_code))
 
-        txn = perform_backtest(stock_code, buy, sell, risk)
-        get_stats(stock_code, txn)
-        txns = txns + txn
+        for strat in setup:
+            try:
+                buy = strat['buy']
+                sell = strat['sell']
+                risk = strat['risk'] is not None and strat['risk'] or []
+            except:
+                error_logger('Error in configuration file')
+
+            txn = perform_backtest(stock_code, buy, sell, risk)
+            txns = txns + txn
 
         info_logger('End of test of {}'.format(stock_code))
 
