@@ -9,5 +9,5 @@
     "is_above(volume, volume20)"
   ],
   "sell": ["is_below(close, alma)"],
-  "risk": []
+  "risk": ["is_above(compute_profit(close, alma), -4.00)"]
 }
