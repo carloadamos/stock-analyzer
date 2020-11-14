@@ -1,13 +1,13 @@
 {
   "buy": [
     "is_above(macd, macds)",
-    "is_above(value, target_value)",
+    "is_above(value, 1000000)",
     "is_above(close, alma)",
     "is_above(close, ma20)",
     "is_above(alma, ma20)",
     "is_above(prev_ma20, prev_alma)",
     "is_above(volume, volume20)",
-    "valid_previous_values(prev_values, target_prev_values)"
+    "valid_previous_values(prev_values, 800000)"
   ],
   "sell": ["is_below(close, alma)"],
   "risk": ["is_above(compute_profit(close, alma), -4.00)"]

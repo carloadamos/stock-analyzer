@@ -16,8 +16,6 @@ stocks_table = database.stocks
 
 # Constants
 COMM_RATE = 1.19
-TARGET_VALUE = 1000000
-TARGET_PREVIOUS_VALUE = 800000
 START_DATE = 1451595600
 
 # Global
@@ -339,8 +337,6 @@ def process_backtest(code, buy_conditions, sell_conditions, risk_conditions):
                 prev_macds = prev_stock['macds']
                 prev_ma20 = prev_stock['ma20']
                 prev_values = get_previous_values(stocks, i, 5)
-                target_prev_values = TARGET_PREVIOUS_VALUE
-                target_value = TARGET_VALUE
                 value = stock['value']
                 volume = stock['volume']
                 volume20 = stock['volume20']
@@ -364,6 +360,8 @@ def process_backtest(code, buy_conditions, sell_conditions, risk_conditions):
                             txn = trade(stock, action)
                             txn['candle'] = is_green_candle(
                                 stock) and 'Green' or 'Red'
+                            txn['above_ma20'] = is_above(
+                                close, ma20) and 'Yes' or 'No'
                             txns.append(txn)
                             buy = not buy
                 else:
