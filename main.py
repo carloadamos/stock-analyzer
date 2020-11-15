@@ -45,18 +45,24 @@ def calculate_win_rate(code, txns):
             "code": code,
             "win_rate": 0,
             "wins": 0,
+            "avg_win": 0,
             "max_win": 0,
             "loss": 0,
+            "avg_loss": 0,
             "max_loss": 0,
             "total_trade": 0,
             "total": 0
         }
 
+    avg_win = 0
+    avg_loss = 0
     df = pd.DataFrame(txns)
     has_open_position = False
+    loss = 0
     total = 0
     valid_txns = len(txns)
     win_rate = 0
+    wins = 0
     winning_trade = 0
 
     # For scenario where:
@@ -71,9 +77,13 @@ def calculate_win_rate(code, txns):
 
     for txn in txns:
         try:
-            total += txn['pnl']
-            if txn['pnl'] > 0:
+            pnl = txn['pnl']
+            total += pnl
+            if pnl > 0:
                 winning_trade += 1
+                wins += pnl
+            else:
+                loss += pnl
         except:
             has_open_position = True
             info_logger('Open position')
@@ -83,13 +93,17 @@ def calculate_win_rate(code, txns):
 
     if winning_trade is not 0:
         win_rate = round(winning_trade/valid_txns * 100, 2)
+        avg_win = wins != 0 and round(wins/winning_trade, 2) or 0
+        avg_loss = loss != 0 and round(loss/(valid_txns-winning_trade), 2) or 0
 
     return {
         "code": code,
         "win_rate": win_rate,
         "wins": winning_trade,
+        "avg_win": avg_win,
         "max_win": max_win,
         "loss": valid_txns - winning_trade,
+        "avg_loss": avg_loss,
         "max_loss": max_loss,
         "total_trade": valid_txns,
         "total": round(total, 2)}
@@ -123,12 +137,15 @@ def convert_timestamp(timestamp):
 
 def display_stats(strategy, stats):
     print('\n{} strategy'.format(strategy))
-    print('Win rate: {0}% \nWins: {1}\nMax Win: {2}%\nLoss: {3}\nMax Loss: {4}%\nTotal: {5}%\n'
+    print('Win rate: {}% \nTotal Trade: {} \nWins: {} \nAverage Win: {}\nMax Win: {}%\nLoss: {} \nAverage Loss: {}\nMax Loss: {}%\nTotal: {}%\n'
           .format(
               stats['win_rate'],
+              stats['total_trade'],
               stats['wins'],
+              stats['avg_win'],
               stats['max_win'],
               stats['loss'],
+              stats['avg_loss'],
               stats['max_loss'],
               stats['total']))
 
@@ -246,7 +263,9 @@ def display_report(name, code, txns, save, filename):
         statsdf = pd.DataFrame(all_stats)
         statsdf['win_rate'] = statsdf['win_rate'].astype(str) + '%'
         statsdf['max_win'] = statsdf['max_win'].astype(str) + '%'
+        statsdf['avg_win'] = statsdf['avg_win'].astype(str) + '%'
         statsdf['max_loss'] = statsdf['max_loss'].astype(str) + '%'
+        statsdf['avg_loss'] = statsdf['avg_loss'].astype(str) + '%'
         statsdf.sort_values(['total'], ascending=True,
                             inplace=True, na_position='last')
         statsdf['total'] = statsdf['total'].astype(str) + '%'
