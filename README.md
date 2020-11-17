@@ -17,7 +17,7 @@ TODO:
 4. Fix stoploss --> DONE
 5. My own strategy - ALMA, MA20 and MACD --> DONE
 6. Test one stock with both strategy --> DONE
-7. Implement stoploss -->
+7. Implement stoploss --> IN PROGRESS
 
 RISK LIST:
 1. is_above(compute_profit(close, alma), -4.00) --> same day risk computation

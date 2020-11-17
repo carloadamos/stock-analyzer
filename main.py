@@ -137,7 +137,7 @@ def convert_timestamp(timestamp):
 
 def display_stats(strategy, stats):
     print('\n{} strategy'.format(strategy))
-    print('Win rate: {}% \nTotal Trade: {} \nWins: {} \nAverage Win: {}\nMax Win: {}%\nLoss: {} \nAverage Loss: {}\nMax Loss: {}%\nTotal: {}%\n'
+    print('Win rate: {}% \nTotal Trade: {} \nWins: {} \nAverage Win: {}%\nMax Win: {}%\nLoss: {} \nAverage Loss: {}%\nMax Loss: {}%\nTotal: {}%\n'
           .format(
               stats['win_rate'],
               stats['total_trade'],
@@ -275,8 +275,8 @@ def display_report(name, code, txns, save, filename):
             save_report(filename, txnsdf, statsdf)
 
         info_logger(txnsdf)
-        display_stats('{}'.format(name), stats)
         info_logger(statsdf)
+        display_stats('{}'.format(name), stats)
 
 
 def save_report(filename, txns, stats):
@@ -289,6 +289,8 @@ def backtest(setup, stocks):
     buy = []
     risk = []
     sell = []
+    stop = 0
+    trail_stop = 0
     txn = []
     txns = []
 
@@ -299,11 +301,14 @@ def backtest(setup, stocks):
             try:
                 buy = strat['buy']
                 sell = strat['sell']
-                risk = strat['risk'] is not None and strat['risk'] or []
+                risk = strat['risk']
+                stop = strat['stop']
+                trail_stop = strat['trail_stop']
             except:
                 error_logger('Error in configuration file')
 
-            txn = process_backtest(stock_code, buy, sell, risk)
+            txn = process_backtest(stock_code, buy, sell,
+                                   risk, stop, trail_stop)
             get_stats(stock_code, txn)
             txns = txns + txn
 
@@ -325,7 +330,7 @@ def valid_previous_values(prev_values, target_prev_value):
     return valid
 
 
-def process_backtest(code, buy_conditions, sell_conditions, risk_conditions):
+def process_backtest(code, buy_criteria, sell_criteria, risk_criteria, stoploss, trail_stop):
     stocks = fetch_stocks(code)
     buy = True
     i = 0
@@ -363,14 +368,14 @@ def process_backtest(code, buy_conditions, sell_conditions, risk_conditions):
                 # BUYING STOCK
                 if buy:
                     valid = False
-                    for condition in buy_conditions:
+                    for condition in buy_criteria:
                         valid = True
                         valid = eval(condition)
                         if not valid:
                             break
 
                     if valid:
-                        for condition in risk_conditions:
+                        for condition in risk_criteria:
                             valid = eval(condition)
                             if not valid:
                                 break
@@ -384,18 +389,32 @@ def process_backtest(code, buy_conditions, sell_conditions, risk_conditions):
                             txns.append(txn)
                             buy = not buy
                 else:
+                    exit_criteria = ''
+                    paperloss = compute_profit(
+                        txns[len(txns)-1]['buy_price'], close)
+                    stop = compute_profit(prev_close, close)
                     valid = False
-                    for condition in sell_conditions:
+
+                    if int(stoploss) >= paperloss:
                         valid = True
-                        valid = eval(condition)
-                        if not valid:
-                            break
+                        exit_criteria = 'STOPLOSS'
+                    elif int(trail_stop) >= stop:
+                        valid = True
+                        exit_criteria = 'TRAIL STOP'
+                    else:
+                        for condition in sell_criteria:
+                            exit_criteria = 'NORMAL EXIT'
+                            valid = True
+                            valid = eval(condition)
+                            if not valid:
+                                break
 
                     if valid:
                         txn = trade(stock, action)
                         txns[len(txns)-1]['sell_date'] = txn['sell_date']
                         txns[len(txns)-1]['sell_price'] = txn['sell_price']
                         txns[len(txns)-1]['pnl'] = compute_pnl(txn, txns)
+                        txns[len(txns)-1]['exit'] = exit_criteria
                         buy = not buy
 
         i += 1

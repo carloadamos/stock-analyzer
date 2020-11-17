@@ -10,5 +10,7 @@
     "valid_previous_values(prev_values, 800000)"
   ],
   "sell": ["is_below(close, alma)"],
-  "risk": ["is_above(compute_profit(close, alma), -4.00)"]
+  "stop": "-2",
+  "risk": ["is_above(compute_profit(close, alma), -4.00)"],
+  "trail_stop": "-3"
 }

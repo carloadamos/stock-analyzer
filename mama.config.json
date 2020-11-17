@@ -8,5 +8,7 @@
     "is_above(volume, volume20)"
   ],
   "sell": ["is_below(close, alma)", "is_below(prev_close, prev_alma)"],
-  "risk": ["is_above(first_breakout(stocks, i), -4.00)"]
+  "stop": "-2",
+  "risk": ["is_above(compute_profit(close, alma), -4.00)"],
+  "trail_stop": "-2"
 }
