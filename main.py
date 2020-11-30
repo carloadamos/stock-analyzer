@@ -109,8 +109,12 @@ def calculate_win_rate(code, txns):
         "total": round(total, 2)}
 
 
-def candle_above_indicator(stock, indicator):
-    return is_green_candle(stock) and stock['open'] > indicator
+def candle_above(stock, indicator):
+    return stock['open'] > indicator and stock['close'] > indicator
+
+
+def candle_below(stock, indicator):
+    return stock['open'] < indicator and stock['close'] < indicator
 
 
 def close_below_alma(stock):
@@ -290,7 +294,7 @@ def backtest(setup, stocks):
     risk = []
     sell = []
     stop = 0
-    trail_stop = 0
+    trail_stop = []
     txn = []
     txns = []
 
@@ -395,13 +399,18 @@ def process_backtest(code, buy_criteria, sell_criteria, risk_criteria, stoploss,
                     stop = compute_profit(prev_close, close)
                     valid = False
 
-                    if int(stoploss) >= paperloss:
+                    if int(stoploss) != 0 and int(stoploss) >= paperloss:
                         valid = True
                         exit_criteria = 'STOPLOSS'
-                    elif int(trail_stop) >= stop:
-                        valid = True
-                        exit_criteria = 'TRAIL STOP'
-                    else:
+                    elif len(trail_stop) != 0:
+                        for condition in trail_stop:
+                            exit_criteria = 'TRAIL STOP'
+                            valid = True
+                            valid = eval(condition)
+                            if not valid:
+                                break
+
+                    if not valid:
                         for condition in sell_criteria:
                             exit_criteria = 'NORMAL EXIT'
                             valid = True
