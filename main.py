@@ -20,6 +20,7 @@ START_DATE = 1451595600
 
 # Global
 all_stats = []
+capital = 100000
 
 
 def first_breakout(stocks, cur_pos):
@@ -51,7 +52,8 @@ def calculate_win_rate(code, txns):
             "avg_loss": 0,
             "max_loss": 0,
             "total_trade": 0,
-            "total": 0
+            "total": 0,
+            "total_capital": 0
         }
 
     avg_win = 0
@@ -106,7 +108,8 @@ def calculate_win_rate(code, txns):
         "avg_loss": avg_loss,
         "max_loss": max_loss,
         "total_trade": valid_txns,
-        "total": round(total, 2)}
+        "total": round(total, 2),
+        "total_capital": round(capital, 2)}
 
 
 def candle_above(stock, indicator):
@@ -141,7 +144,7 @@ def convert_timestamp(timestamp):
 
 def display_stats(strategy, stats):
     print('\n{} strategy'.format(strategy))
-    print('Win rate: {}% \nTotal Trade: {} \nWins: {} \nAverage Win: {}%\nMax Win: {}%\nLoss: {} \nAverage Loss: {}%\nMax Loss: {}%\nTotal: {}%\n'
+    print('Win rate: {}% \nTotal Trade: {} \nWins: {} \nAverage Win: {}%\nMax Win: {}%\nLoss: {} \nAverage Loss: {}%\nMax Loss: {}%\nTotal: {}%\nTotal Capital: {}'
           .format(
               stats['win_rate'],
               stats['total_trade'],
@@ -151,7 +154,8 @@ def display_stats(strategy, stats):
               stats['loss'],
               stats['avg_loss'],
               stats['max_loss'],
-              stats['total']))
+              stats['total'],
+              stats['total_capital']))
 
 
 def fetch_all_stocks():
@@ -335,15 +339,17 @@ def valid_previous_values(prev_values, target_prev_value):
 
 
 def process_backtest(code, buy_criteria, sell_criteria, risk_criteria, stoploss, trail_stop):
-    stocks = fetch_stocks(code)
+    stock_data = fetch_stocks(code)
     buy = True
     i = 0
 
     txns = []
-    # Loop
-    for stock in stocks:
+    trade_capital = 0
+    global capital
+
+    for stock in stock_data:
         action = buy and 'BUY' or 'SELL'
-        prev_stock = stocks[i-1]
+        prev_stock = stock_data[i-1]
 
         if (prev_stock['alma'] is not None
             and prev_stock['macd'] is not None
@@ -364,7 +370,7 @@ def process_backtest(code, buy_criteria, sell_criteria, risk_criteria, stoploss,
                 prev_macd = prev_stock['macd']
                 prev_macds = prev_stock['macds']
                 prev_ma20 = prev_stock['ma20']
-                prev_values = get_previous_values(stocks, i, 5)
+                prev_values = get_previous_values(stock_data, i, 5)
                 value = stock['value']
                 volume = stock['volume']
                 volume20 = stock['volume20']
@@ -385,12 +391,14 @@ def process_backtest(code, buy_criteria, sell_criteria, risk_criteria, stoploss,
                                 break
 
                         if valid:
-                            txn = trade(stock, action)
+                            trade_capital = capital * 0.08
+                            txn = trade(stock, action, trade_capital)
                             txn['candle'] = is_green_candle(
                                 stock) and 'Green' or 'Red'
                             txn['above_ma20'] = is_above(
                                 close, ma20) and 'Yes' or 'No'
                             txns.append(txn)
+                            capital += -(trade_capital)
                             buy = not buy
                 else:
                     exit_criteria = ''
@@ -420,10 +428,14 @@ def process_backtest(code, buy_criteria, sell_criteria, risk_criteria, stoploss,
 
                     if valid:
                         txn = trade(stock, action)
+                        pnl = compute_pnl(txn, txns)
+                        amount = round(trade_capital * (pnl/100), 2)
                         txns[len(txns)-1]['sell_date'] = txn['sell_date']
                         txns[len(txns)-1]['sell_price'] = txn['sell_price']
-                        txns[len(txns)-1]['pnl'] = compute_pnl(txn, txns)
+                        txns[len(txns)-1]['pnl'] = pnl
                         txns[len(txns)-1]['exit'] = exit_criteria
+                        txns[len(txns)-1]['amount'] = amount
+                        capital += trade_capital + amount
                         buy = not buy
 
         i += 1
@@ -453,12 +465,12 @@ def stock_to_test():
     return code != '' and code.upper() or ''
 
 
-def trade(stock, action):
+def trade(stock, action, trade_capital=0):
     txn = {}
 
     if action == 'BUY':
         txn = {"code": stock['code'], "buy_date": convert_timestamp(stock['timestamp']),
-               "buy_price": stock['close']}
+               "buy_price": stock['close'], "bought_shares": int(trade_capital/stock['close'])}
     else:
         txn = {"code": stock['code'], "sell_date": convert_timestamp(stock['timestamp']),
                "sell_price": stock['close']}
