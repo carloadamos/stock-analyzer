@@ -234,9 +234,10 @@ def main():
 
     if strat == '1':
         strat_name = 'MAMA'
-        if action == '1':
+        if action == '2':
             configs = ['mama.analyze.config.json']
-        configs = ['mama.config.json']
+        else:
+            configs = ['mama.config.json']
     elif strat == '2':
         strat_name = 'DOUBLE CROSS'
         configs = ['double_cross.config.json']
