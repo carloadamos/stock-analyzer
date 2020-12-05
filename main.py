@@ -408,8 +408,15 @@ def process_backtest(code, buy_criteria, sell_criteria, risk_criteria, stoploss,
                     valid = False
 
                     if int(stoploss) != 0 and int(stoploss) >= paperloss:
-                        valid = True
-                        exit_criteria = 'STOPLOSS'
+                        buy_price = txns[len(txns)-1]['buy_price']
+                        cut_price = round(buy_price -
+                                          (buy_price * abs(int(stoploss))/100), 2)
+
+                        if cut_price >= stock['low'] and cut_price <= stock['high']:
+                            exit_criteria = 'STOPLOSS'
+                            stock['close'] = cut_price
+                            valid = True
+
                     elif len(trail_stop) != 0:
                         for condition in trail_stop:
                             exit_criteria = 'TRAIL STOP'
