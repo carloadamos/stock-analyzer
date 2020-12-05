@@ -13,6 +13,6 @@
   "trail_stop": [
     "is_below(close, prev_close)",
     "is_above(compute_profit(prev_close, close), -2.00)",
-    "candle_below(candle, alma)"
+    "candle_below(sell_candle, alma)"
   ]
 }

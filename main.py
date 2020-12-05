@@ -211,6 +211,7 @@ def low_below_alma(stock):
 
 
 def main():
+    action = ''
     configs = ''
     txns = []
     filename = ''
@@ -218,47 +219,46 @@ def main():
     strat_name = ''
     stocks = []
 
+    action = input(
+        '[1-Backtest] [2-Trade Analysis]: ')
     strat = input(
-        'Which strategy would you like to test?\n[1 - MAMA]\n[2 - DOUBLE CROSS]: ')
+        '[1 - MAMA] [2 - DOUBLE CROSS]: ')
+    code = input('Stock symbol: ')
+    save = save_file()
 
-    code = input('Enter stock to test: ')
+    code = code == '' and codes or code.upper()
+    stocks = code == 'ALL' and codes or [code]
 
-    if code != '':
-        code = code.upper()
-        stocks = code == 'ALL' and codes or [code]
+    if save:
+        filename = get_filename()
 
-        save = save_file()
-
-        if save:
-            filename = get_filename()
-
-        if strat == '1':
-            strat_name = 'MAMA'
-            configs = ['mama.config.json']
-        elif strat == '2':
-            strat_name = 'DOUBLE CROSS'
-            configs = ['double_cross.config.json']
-        elif strat.upper() == 'ALL':
-            strat_name = 'ALL'
-            configs = ['mama.config.json', 'double_cross.config.json']
-        else:
-            print('No strategy like that yet')
-
-        for config in configs:
-            with open('{}'.format(config)) as file:
-                setup.append(json.loads(file.read()))
-
-        info_logger('Starting {} test'.format(strat_name))
-        txns = backtest(setup, stocks)
-        info_logger('End {} test'.format(strat_name))
-
-        if code == 'ALL':
-            get_stats(code, txns)
-
-        display_report(strat_name, code, txns, save, filename)
-        show_parameters('{}'.format(strat_name), code, save, filename)
+    if strat == '1':
+        strat_name = 'MAMA'
+        if action == '1':
+            configs = ['mama.analyze.config.json']
+        configs = ['mama.config.json']
+    elif strat == '2':
+        strat_name = 'DOUBLE CROSS'
+        configs = ['double_cross.config.json']
+    elif strat.upper() == 'ALL':
+        strat_name = 'ALL'
+        configs = ['mama.config.json', 'double_cross.config.json']
     else:
-        info_logger('Enter stock to test')
+        print('No strategy like that yet')
+
+    for config in configs:
+        with open('{}'.format(config)) as file:
+            setup.append(json.loads(file.read()))
+
+    info_logger('Starting {} test'.format(strat_name))
+    txns = analyzer(setup, stocks, action)
+    info_logger('End {} test'.format(strat_name))
+
+    if code == 'ALL':
+        get_stats(code, txns)
+
+    display_report(strat_name, code, txns, save, filename)
+    show_parameters('{}'.format(strat_name), code, save, filename)
 
 
 def display_report(name, code, txns, save, filename):
@@ -293,7 +293,7 @@ def save_report(filename, txns, stats):
         txns.to_excel(writer, sheet_name='Details')
 
 
-def backtest(setup, stocks):
+def analyzer(setup, stocks, action):
     buy = []
     risk = []
     sell = []
@@ -315,8 +315,13 @@ def backtest(setup, stocks):
             except:
                 error_logger('Error in configuration file')
 
-            txn = process_backtest(stock_code, buy, sell,
-                                   risk, stop, trail_stop)
+            if action == '1':
+                txn = backtest(stock_code, buy, sell,
+                               risk, stop, trail_stop)
+            else:
+                txn = analyze(stock_code, buy, sell,
+                              risk, stop, trail_stop)
+
             get_stats(stock_code, txn)
             txns = txns + txn
 
@@ -338,7 +343,7 @@ def valid_previous_values(prev_values, target_prev_value):
     return valid
 
 
-def process_backtest(code, buy_criteria, sell_criteria, risk_criteria, stoploss, trail_stop):
+def backtest(code, buy_criteria, sell_criteria, risk_criteria, stoploss, trail_stop):
     stock_data = fetch_stocks(code)
     buy = True
     i = 0
@@ -347,33 +352,33 @@ def process_backtest(code, buy_criteria, sell_criteria, risk_criteria, stoploss,
     trade_capital = 0
     global capital
 
-    for stock in stock_data:
+    for candle in stock_data:
         action = buy and 'BUY' or 'SELL'
-        prev_stock = stock_data[i-1]
+        prev_candle = stock_data[i-1]
 
-        if (prev_stock['alma'] is not None
-            and prev_stock['macd'] is not None
-            and prev_stock['ma20'] is not None
-                and prev_stock['volume20'] is not None):
+        if (prev_candle['alma'] is not None
+            and prev_candle['macd'] is not None
+            and prev_candle['ma20'] is not None
+                and prev_candle['volume20'] is not None):
 
-            if stock['timestamp'] >= START_DATE:
+            if candle['timestamp'] >= START_DATE:
 
                 # Variables for eval
                 # pylint: disable=unused-variable
-                alma = stock['alma']
-                close = stock['close']
-                ma20 = stock['ma20']
-                macd = stock['macd']
-                macds = stock['macds']
-                prev_alma = prev_stock['alma']
-                prev_close = prev_stock['close']
-                prev_macd = prev_stock['macd']
-                prev_macds = prev_stock['macds']
-                prev_ma20 = prev_stock['ma20']
+                alma = candle['alma']
+                close = candle['close']
+                ma20 = candle['ma20']
+                macd = candle['macd']
+                macds = candle['macds']
+                prev_alma = prev_candle['alma']
+                prev_close = prev_candle['close']
+                prev_macd = prev_candle['macd']
+                prev_macds = prev_candle['macds']
+                prev_ma20 = prev_candle['ma20']
                 prev_values = get_previous_values(stock_data, i, 5)
-                value = stock['value']
-                volume = stock['volume']
-                volume20 = stock['volume20']
+                value = candle['value']
+                volume = candle['volume']
+                volume20 = candle['volume20']
 
                 # BUYING STOCK
                 if buy:
@@ -392,9 +397,9 @@ def process_backtest(code, buy_criteria, sell_criteria, risk_criteria, stoploss,
 
                         if valid:
                             trade_capital = capital * 0.08
-                            txn = trade(stock, action, trade_capital)
+                            txn = trade(candle, action, trade_capital)
                             txn['candle'] = is_green_candle(
-                                stock) and 'Green' or 'Red'
+                                candle) and 'Green' or 'Red'
                             txn['above_ma20'] = is_above(
                                 close, ma20) and 'Yes' or 'No'
                             txns.append(txn)
@@ -412,9 +417,9 @@ def process_backtest(code, buy_criteria, sell_criteria, risk_criteria, stoploss,
                         cut_price = round(buy_price -
                                           (buy_price * abs(int(stoploss))/100), 2)
 
-                        if cut_price >= stock['low'] and cut_price <= stock['high']:
+                        if cut_price >= candle['low'] and cut_price <= candle['high']:
                             exit_criteria = 'STOPLOSS'
-                            stock['close'] = cut_price
+                            candle['close'] = cut_price
                             valid = True
 
                     elif len(trail_stop) != 0:
@@ -434,7 +439,7 @@ def process_backtest(code, buy_criteria, sell_criteria, risk_criteria, stoploss,
                                 break
 
                     if valid:
-                        txn = trade(stock, action)
+                        txn = trade(candle, action)
                         pnl = compute_pnl(txn, txns)
                         amount = round(trade_capital * (pnl/100), 2)
                         txns[len(txns)-1]['sell_date'] = txn['sell_date']
@@ -450,12 +455,124 @@ def process_backtest(code, buy_criteria, sell_criteria, risk_criteria, stoploss,
     return txns
 
 
+def analyze(code, buy_criteria, sell_criteria, risk_criteria, stoploss, trail_stop):
+    stock_data = fetch_stocks(code)
+    buy = True
+    buy_date = ''
+    i = 0
+
+    txns = []
+    trade_capital = 0
+    global capital
+
+    for candle in stock_data:
+        action = 'BUY'
+        prev_candle = stock_data[i-1]
+        j = 0
+
+        if (prev_candle['alma'] is not None
+            and prev_candle['macd'] is not None
+            and prev_candle['ma20'] is not None
+                and prev_candle['volume20'] is not None):
+
+            if candle['timestamp'] >= START_DATE:
+
+                # Variables for eval
+                # pylint: disable=unused-variable
+                ma20 = candle['ma20']
+                close = candle['close']
+
+                # BUYING STOCK
+                trade_capital = capital * 0.08
+                txn = trade(candle, action, trade_capital)
+                txn['candle'] = is_green_candle(
+                    candle) and 'Green' or 'Red'
+                txn['above_ma20'] = is_above(
+                    close, ma20) and 'Yes' or 'No'
+                txns.append(txn)
+                capital += -(trade_capital)
+                buy = not buy
+                buy_date = candle['timestamp']
+
+                for sell_candle in stock_data:
+                    action = 'SELL'
+                    sell_prev_candle = stock_data[j-1]
+                    # Variables for eval
+                    # pylint: disable=unused-variable
+                    alma = sell_candle['alma']
+                    close = sell_candle['close']
+                    ma20 = sell_candle['ma20']
+                    macd = sell_candle['macd']
+                    macds = sell_candle['macds']
+                    prev_alma = sell_prev_candle['alma']
+                    prev_close = sell_prev_candle['close']
+                    prev_macd = sell_prev_candle['macd']
+                    prev_macds = sell_prev_candle['macds']
+                    prev_ma20 = sell_prev_candle['ma20']
+                    prev_values = get_previous_values(stock_data, j, 5)
+                    value = sell_candle['value']
+                    volume = sell_candle['volume']
+                    volume20 = sell_candle['volume20']
+
+                    if sell_candle['timestamp'] > buy_date:
+                        exit_criteria = ''
+                        paperloss = compute_profit(
+                            txns[len(txns)-1]['buy_price'], close)
+                        stop = compute_profit(prev_close, close)
+                        valid = False
+
+                        if int(stoploss) != 0 and int(stoploss) >= paperloss:
+                            buy_price = txns[len(txns)-1]['buy_price']
+                            cut_price = round(buy_price -
+                                              (buy_price * abs(int(stoploss))/100), 2)
+
+                            if cut_price >= candle['low'] and cut_price <= candle['high']:
+                                exit_criteria = 'STOPLOSS'
+                                candle['close'] = cut_price
+                                valid = True
+
+                        elif len(trail_stop) != 0:
+                            for condition in trail_stop:
+                                exit_criteria = 'TRAIL STOP'
+                                valid = True
+                                valid = eval(condition)
+                                if not valid:
+                                    break
+
+                        if not valid:
+                            for condition in sell_criteria:
+                                exit_criteria = 'NORMAL EXIT'
+                                valid = True
+                                valid = eval(condition)
+                                if not valid:
+                                    break
+
+                        if valid:
+                            txn = trade(sell_candle, action)
+                            pnl = compute_pnl(txn, txns)
+                            amount = round(trade_capital * (pnl/100), 2)
+                            txns[len(txns)-1]['sell_date'] = txn['sell_date']
+                            txns[len(txns)-1]['sell_price'] = txn['sell_price']
+                            txns[len(txns)-1]['pnl'] = pnl
+                            txns[len(txns)-1]['exit'] = exit_criteria
+                            txns[len(txns)-1]['amount'] = amount
+                            capital += trade_capital + amount
+                            buy = not buy
+                            break
+
+                    j += 1
+
+        i += 1
+
+    return txns
+
+
 def previous_breakout_candle(stock, indicator):
     return stock['open'] <= indicator and stock['close'] >= indicator
 
 
 def save_file():
-    save = input('Save result to excel file? [Y/N]: ')
+    save = input('Save result? [Y/N]: ')
     save = save.upper()
     return save == 'Y' and True or False
 
