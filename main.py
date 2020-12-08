@@ -497,7 +497,7 @@ def analyze(code, buy_criteria, sell_criteria, risk_criteria, stoploss, trail_st
 
                 # BUYING STOCK
                 if buy:
-                    valid = True
+                    valid = len(buy_criteria) == 0 and True or False
 
                     # Check buy criteria
                     for condition in buy_criteria:
